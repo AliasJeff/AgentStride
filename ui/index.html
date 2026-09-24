@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0b1110" />
+    <title>AgentStride / Flow Console</title>
+    <script>
+      window.__AG_DEFAULT_RUN__ = __AG_DEFAULT_RUN__;
+    </script>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand-lockup">
+          <span class="brand-mark" aria-hidden="true">AG</span>
+          <div>
+            <p class="eyebrow">AgentStride / Runtime</p>
+            <h1>Execution flow</h1>
+          </div>
+        </div>
+        <div class="topbar-controls">
+          <label class="run-picker">
+            <span class="sr-only">Observed run</span>
+            <select id="run-select" aria-label="Select a runtime run">
+              <option>Loading runs...</option>
+            </select>
+          </label>
+          <label class="task-picker">
+            <span class="sr-only">Observed task</span>
+            <select id="task-select" aria-label="Select a task to inspect">
+              <option>Loading tasks...</option>
+            </select>
+          </label>
+          <span id="connection-state" class="connection-state" data-state="idle">
+            Connecting
+          </span>
+          <button id="refresh-button" class="icon-button" type="button" aria-label="Refresh run data">
+            <span aria-hidden="true">↻</span>
+          </button>
+        </div>
+      </header>
+
+      <main id="main-content" aria-live="polite">
+        <section id="empty-state" class="empty-state" hidden>
+          <p class="eyebrow">No runtime selected</p>
+          <h2>Start a Run to observe its execution.</h2>
+          <p>The UI reads local Runtime history and will not create or mutate work.</p>
+        </section>
+
+        <section id="error-state" class="error-state" hidden>
+          <p class="eyebrow">Read failed</p>
+          <h2 id="error-title">The Runtime could not be read.</h2>
+          <p id="error-message"></p>
+          <button id="retry-button" class="button button-primary" type="button">Retry</button>
+        </section>
+
+        <div id="dashboard" hidden>
+          <section class="run-header" aria-label="Run overview">
+            <div class="run-identity">
+              <div>
+                <p class="eyebrow">Observed run</p>
+                <div class="run-title-line">
+                  <h2 id="run-title">Research run</h2>
+                  <span id="run-status" class="status-pill">Loading</span>
+                </div>
+              </div>
+              <div class="revision-chip">
+                <span>plan</span>
+                <code id="plan-revision">-</code>
+              </div>
+            </div>
+            <div class="metric-grid" id="metric-grid" aria-label="Run metrics"></div>
+          </section>
+
+          <section class="console-layout">
+            <section class="flow-panel" aria-labelledby="flow-title">
+              <div class="flow-heading">
+                <div>
+                  <p class="eyebrow">Live execution map</p>
+                  <h2 id="flow-title">Plan to durable attempt</h2>
+                </div>
+                <div class="flow-tools" aria-label="Flow map controls">
+                  <span id="flow-zoom-label" class="zoom-label">100%</span>
+                  <button id="zoom-out" class="icon-button icon-button-small" type="button" aria-label="Zoom out">−</button>
+                  <button id="zoom-in" class="icon-button icon-button-small" type="button" aria-label="Zoom in">+</button>
+                  <button id="zoom-reset" class="reset-button" type="button">Reset view</button>
+                </div>
+              </div>
+              <div class="flow-legend" aria-label="Flow status legend">
+                <span><i class="legend-dot is-succeeded"></i>Succeeded</span>
+                <span><i class="legend-dot is-active"></i>Active</span>
+                <span><i class="legend-dot is-waiting"></i>Waiting</span>
+                <span><i class="legend-dot is-failed"></i>Failed</span>
+              </div>
+              <div id="flow-viewport" class="flow-viewport" tabindex="0" aria-label="Interactive execution flow map">
+                <svg id="flow-canvas" role="img" aria-labelledby="flow-title" viewBox="0 0 1100 560" preserveAspectRatio="xMidYMid meet">
+                  <defs>
+                    <marker id="flow-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+                      <path d="M 0 0 L 8 4 L 0 8 z" fill="#365047"></path>
+                    </marker>
+                  </defs>
+                  <g id="flow-world"></g>
+                </svg>
+                <div id="flow-empty" class="flow-empty" hidden>
+                  <strong>No tasks in this Run</strong>
+                  <span>Reconcile a plan to populate the execution map.</span>
+                </div>
+              </div>
+              <div class="flow-footer">
+                <span id="flow-note">Click a task node to inspect its attempts and events.</span>
+                <span id="history-cursor" class="mono">history 0</span>
+              </div>
+            </section>
+
+            <aside class="inspector-panel" aria-labelledby="inspector-title">
+              <div class="inspector-heading">
+                <div>
+                  <p class="eyebrow">Selection</p>
+                  <h2 id="inspector-title">Run inspector</h2>
+                </div>
+                <span id="detail-seq" class="panel-meta mono">run</span>
+              </div>
+              <div id="inspector-content" class="inspector-content">
+                <p class="inspector-kicker">Current run</p>
+                <strong id="inspector-name">Select a task or event</strong>
+                <p id="inspector-summary" class="inspector-summary">
+                  The map is the primary view. Select a node or event to inspect durable state.
+                </p>
+              </div>
+              <pre id="event-detail" class="event-detail">No event selected.</pre>
+              <div class="inspector-foot">
+                <span id="last-updated">Waiting for first snapshot</span>
+                <span class="read-only-tag">read only</span>
+              </div>
+            </aside>
+          </section>
+
+          <section class="events-panel" aria-labelledby="events-title">
+            <div class="events-heading">
+              <div>
+                <p class="eyebrow">Append-only history</p>
+                <h2 id="events-title">Recent execution events</h2>
+              </div>
+              <span id="event-count" class="panel-meta"></span>
+            </div>
+            <div id="event-list" class="event-list"></div>
+          </section>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>
