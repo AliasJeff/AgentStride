@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 0cf3efced1441b8ff7c8cdf9203789fde35378ea33400fd7443051e5e3963030 # shrinks to extra_edges = [false, true, true, false, false]

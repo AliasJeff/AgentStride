@@ -1,0 +1,17 @@
+agent-stride benchmark report
+Date: 2026-09-26
+Host: Apple Silicon macOS development machine
+Command: cargo bench --bench engine -- --noplot
+Criterion: 0.7
+
+Method:
+- SQLite database population is outside the timed region.
+- Each benchmark uses Criterion warmup and 100 measured samples.
+- Results are local observations, not portable performance claims.
+
+Results:
+ready_query/1000    [611.03 us 616.65 us 623.54 us]
+ready_query/10000   [6.6312 ms 6.6625 ms 6.6981 ms]
+cycle_check/100     [38.142 us 38.370 us 38.754 us]
+cycle_check/1000    [2.1763 ms 2.1848 ms 2.1945 ms]
+journal_page_10000  [14.528 ms 14.611 ms 14.724 ms]
