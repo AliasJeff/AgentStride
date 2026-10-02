@@ -1,17 +1,17 @@
 # Deterministic Evaluation
 
-`ag-eval` measures AgentStride's execution control plane with deterministic
+`as-eval` measures AgentStride's execution control plane with deterministic
 fake workers. It does not measure model intelligence and requires no API key.
 
 ## Run
 
 ```bash
-cargo run --bin ag-eval -- --scenario chain --agents 2 --seed 7
-cargo run --bin ag-eval -- --scenario diamond --agents 4 --seed 7
-cargo run --bin ag-eval -- --scenario wide --agents 4 --seed 7
+cargo run --bin as-eval -- --scenario chain --agents 2 --seed 7
+cargo run --bin as-eval -- --scenario diamond --agents 4 --seed 7
+cargo run --bin as-eval -- --scenario wide --agents 4 --seed 7
 
 # Durable Runtime variant
-cargo run --bin ag-eval -- --variant runtime --scenario chain --agents 2 --seed 7
+cargo run --bin as-eval -- --variant runtime --scenario chain --agents 2 --seed 7
 ```
 
 The output is JSON and records:

@@ -3,7 +3,7 @@ use serde_json::Value;
 use tempfile::tempdir;
 
 fn json_command(project: &std::path::Path, args: &[&str]) -> Value {
-    let output = Command::cargo_bin("ag")
+    let output = Command::cargo_bin("as")
         .expect("binary should build")
         .current_dir(project)
         .args(args)
@@ -20,7 +20,7 @@ fn json_command(project: &std::path::Path, args: &[&str]) -> Value {
 #[test]
 fn lifecycle_mutations_are_visible_through_a_cursor() {
     let project = tempdir().expect("temporary project");
-    Command::cargo_bin("ag")
+    Command::cargo_bin("as")
         .expect("binary should build")
         .current_dir(project.path())
         .args(["init", "--quiet"])
@@ -75,7 +75,7 @@ fn lifecycle_mutations_are_visible_through_a_cursor() {
 #[test]
 fn edge_mutations_are_journaled_with_payloads() {
     let project = tempdir().expect("temporary project");
-    Command::cargo_bin("ag")
+    Command::cargo_bin("as")
         .expect("binary should build")
         .current_dir(project.path())
         .args(["init", "--quiet"])
@@ -94,7 +94,7 @@ fn edge_mutations_are_journaled_with_payloads() {
         project.path(),
         &["link", &dependent, "--blocks", &blocker, "--json"],
     );
-    Command::cargo_bin("ag")
+    Command::cargo_bin("as")
         .expect("binary should build")
         .current_dir(project.path())
         .args(["unlink", &dependent, &blocker])

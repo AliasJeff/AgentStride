@@ -5,14 +5,14 @@ use tempfile::tempdir;
 #[test]
 fn message_send_inbox_and_reply_preserve_thread() {
     let project = tempdir().expect("temporary project");
-    Command::cargo_bin("ag")
+    Command::cargo_bin("as")
         .expect("binary should build")
         .current_dir(project.path())
         .args(["init", "--quiet"])
         .assert()
         .success();
 
-    let sent = Command::cargo_bin("ag")
+    let sent = Command::cargo_bin("as")
         .expect("binary should build")
         .current_dir(project.path())
         .args([
@@ -32,7 +32,7 @@ fn message_send_inbox_and_reply_preserve_thread() {
     let message: Value = serde_json::from_slice(&sent.stdout).expect("message JSON");
     let thread = message["thread_id"].as_str().expect("thread id");
 
-    Command::cargo_bin("ag")
+    Command::cargo_bin("as")
         .expect("binary should build")
         .current_dir(project.path())
         .args([
@@ -41,7 +41,7 @@ fn message_send_inbox_and_reply_preserve_thread() {
         .assert()
         .success();
 
-    let inbox = Command::cargo_bin("ag")
+    let inbox = Command::cargo_bin("as")
         .expect("binary should build")
         .current_dir(project.path())
         .args(["inbox", "--actor", "agent-b", "--json"])
@@ -50,7 +50,7 @@ fn message_send_inbox_and_reply_preserve_thread() {
     let messages: Value = serde_json::from_slice(&inbox.stdout).expect("inbox JSON");
     assert_eq!(messages.as_array().expect("message list").len(), 1);
 
-    let thread_output = Command::cargo_bin("ag")
+    let thread_output = Command::cargo_bin("as")
         .expect("binary should build")
         .current_dir(project.path())
         .args(["thread", thread, "--json"])

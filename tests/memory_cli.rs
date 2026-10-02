@@ -4,7 +4,7 @@ use serde_json::Value;
 use tempfile::TempDir;
 
 fn command(project: &TempDir, args: &[&str]) -> assert_cmd::assert::Assert {
-    let mut command = Command::cargo_bin("ag").expect("binary");
+    let mut command = Command::cargo_bin("as").expect("binary");
     command.current_dir(project.path()).args(args);
     command.assert()
 }

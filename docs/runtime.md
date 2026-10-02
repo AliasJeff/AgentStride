@@ -104,8 +104,8 @@ exercise chains, diamonds, retries, timeouts, handoffs, recovery, and plan
 evolution without a model API key.
 
 ```bash
-cargo run --bin ag-eval -- --scenario chain --agents 2 --seed 7
-cargo run --bin ag-eval -- --variant runtime --scenario chain --agents 2 --seed 7
+cargo run --bin as-eval -- --scenario chain --agents 2 --seed 7
+cargo run --bin as-eval -- --variant runtime --scenario chain --agents 2 --seed 7
 ```
 
 The important measures are dependency violations, duplicate claims, successful

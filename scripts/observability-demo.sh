@@ -3,12 +3,12 @@ set -euo pipefail
 
 # Run the durable demo and immediately open its read-only observability UI.
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-AG_BIN="${AG_BIN:-}"
+AS_BIN="${AS_BIN:-}"
 PORT="${PORT:-8787}"
 
-if [[ -z "$AG_BIN" ]]; then
-    cargo build --quiet --manifest-path "$ROOT/Cargo.toml" --bin ag
-    AG_BIN="$ROOT/target/debug/ag"
+if [[ -z "$AS_BIN" ]]; then
+    cargo build --quiet --manifest-path "$ROOT/Cargo.toml" --bin as
+    AS_BIN="$ROOT/target/debug/as"
 fi
 
 demo_output="$("$ROOT/scripts/durable-runtime-demo.sh")"
@@ -21,7 +21,7 @@ if [[ -z "$demo_workspace" || ! -d "$demo_workspace" ]]; then
 fi
 
 printf 'opening observability UI on http://127.0.0.1:%s\n' "$PORT"
-exec "$AG_BIN" \
+exec "$AS_BIN" \
     --workspace "$demo_workspace" \
     ui \
     --run research-run \

@@ -18,7 +18,7 @@ fn free_port() -> u16 {
 }
 
 fn start_ui(project: &TempDir, port: u16) -> Child {
-    Command::new(env!("CARGO_BIN_EXE_ag"))
+    Command::new(env!("CARGO_BIN_EXE_as"))
         .args([
             "--workspace",
             project.path().to_str().expect("project"),
@@ -69,7 +69,7 @@ fn body(response: &str) -> &str {
 #[test]
 fn ui_serves_static_page_and_runtime_json_without_mutating_history() {
     let project = TempDir::new().expect("project");
-    Command::new(env!("CARGO_BIN_EXE_ag"))
+    Command::new(env!("CARGO_BIN_EXE_as"))
         .args([
             "--workspace",
             project.path().to_str().expect("project"),

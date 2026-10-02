@@ -4,7 +4,7 @@ use serde_json::Value;
 use tempfile::tempdir;
 
 fn command(project: &std::path::Path, args: &[&str]) -> std::process::Output {
-    Command::cargo_bin("ag")
+    Command::cargo_bin("as")
         .expect("binary should build")
         .current_dir(project)
         .args(args)
@@ -25,7 +25,7 @@ fn json_command(project: &std::path::Path, args: &[&str]) -> Value {
 #[test]
 fn claim_next_assigns_ready_work_and_rejects_foreign_worker() {
     let project = tempdir().expect("temporary project");
-    Command::cargo_bin("ag")
+    Command::cargo_bin("as")
         .expect("binary should build")
         .current_dir(project.path())
         .args(["init", "--quiet"])
@@ -53,7 +53,7 @@ fn claim_next_assigns_ready_work_and_rejects_foreign_worker() {
     );
     assert_eq!(retry["revision"], 2);
 
-    Command::cargo_bin("ag")
+    Command::cargo_bin("as")
         .expect("binary should build")
         .current_dir(project.path())
         .args(["claim", &id, "--actor", "worker-b", "--json"])
@@ -67,7 +67,7 @@ fn claim_next_assigns_ready_work_and_rejects_foreign_worker() {
 #[test]
 fn update_revision_guard_rejects_stale_cli_writes() {
     let project = tempdir().expect("temporary project");
-    Command::cargo_bin("ag")
+    Command::cargo_bin("as")
         .expect("binary should build")
         .current_dir(project.path())
         .args(["init", "--quiet"])
@@ -90,7 +90,7 @@ fn update_revision_guard_rejects_stale_cli_writes() {
         ],
     );
 
-    Command::cargo_bin("ag")
+    Command::cargo_bin("as")
         .expect("binary should build")
         .current_dir(project.path())
         .args([

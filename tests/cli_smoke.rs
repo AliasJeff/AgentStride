@@ -4,7 +4,7 @@ use tempfile::tempdir;
 
 #[test]
 fn help_is_available() {
-    let mut command = Command::cargo_bin("ag").expect("binary should build");
+    let mut command = Command::cargo_bin("as").expect("binary should build");
 
     command
         .arg("--help")
@@ -17,7 +17,7 @@ fn help_is_available() {
 fn init_creates_an_idempotent_workspace() {
     let project = tempdir().expect("temporary project");
 
-    let mut first = Command::cargo_bin("ag").expect("binary should build");
+    let mut first = Command::cargo_bin("as").expect("binary should build");
     first
         .current_dir(project.path())
         .arg("init")
@@ -32,7 +32,7 @@ fn init_creates_an_idempotent_workspace() {
             .is_file()
     );
 
-    let mut second = Command::cargo_bin("ag").expect("binary should build");
+    let mut second = Command::cargo_bin("as").expect("binary should build");
     second
         .current_dir(project.path())
         .arg("init")
@@ -45,7 +45,7 @@ fn init_creates_an_idempotent_workspace() {
 fn init_supports_an_explicit_project_path() {
     let project = tempdir().expect("temporary project");
     let expected = project.path().join(".agent-stride");
-    let mut command = Command::cargo_bin("ag").expect("binary should build");
+    let mut command = Command::cargo_bin("as").expect("binary should build");
 
     command
         .arg("--workspace")

@@ -6,13 +6,13 @@ use tempfile::tempdir;
 fn marking_inbox_read_is_replayed() {
     let source = tempdir().expect("source workspace");
     let replayed = tempdir().expect("replayed workspace");
-    Command::cargo_bin("ag")
+    Command::cargo_bin("as")
         .expect("binary should build")
         .current_dir(source.path())
         .args(["init", "--quiet"])
         .assert()
         .success();
-    Command::cargo_bin("ag")
+    Command::cargo_bin("as")
         .expect("binary should build")
         .current_dir(source.path())
         .args([
@@ -27,7 +27,7 @@ fn marking_inbox_read_is_replayed() {
         .assert()
         .success();
 
-    let inbox = Command::cargo_bin("ag")
+    let inbox = Command::cargo_bin("as")
         .expect("binary should build")
         .current_dir(source.path())
         .args(["inbox", "--actor", "agent-b", "--json"])
@@ -36,14 +36,14 @@ fn marking_inbox_read_is_replayed() {
     let messages: Value = serde_json::from_slice(&inbox.stdout).expect("inbox JSON");
     let message_id = messages[0]["id"].as_str().expect("message id");
 
-    Command::cargo_bin("ag")
+    Command::cargo_bin("as")
         .expect("binary should build")
         .current_dir(source.path())
         .args(["inbox", "--actor", "agent-b", "--mark-read", "--quiet"])
         .assert()
         .success();
 
-    let events = Command::cargo_bin("ag")
+    let events = Command::cargo_bin("as")
         .expect("binary should build")
         .current_dir(source.path())
         .args(["events", "--since", "0", "--limit", "100", "--json"])
@@ -68,14 +68,14 @@ fn marking_inbox_read_is_replayed() {
         .join("\n");
     std::fs::write(&export, event_lines).expect("write events");
 
-    Command::cargo_bin("ag")
+    Command::cargo_bin("as")
         .expect("binary should build")
         .args(["replay", export.to_str().expect("path"), "--into"])
         .arg(replayed.path())
         .assert()
         .success();
 
-    let recovered_inbox = Command::cargo_bin("ag")
+    let recovered_inbox = Command::cargo_bin("as")
         .expect("binary should build")
         .current_dir(replayed.path())
         .args(["inbox", "--actor", "agent-b", "--json"])

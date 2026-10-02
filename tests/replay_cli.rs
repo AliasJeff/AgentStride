@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use tempfile::tempdir;
 
 fn run(project: &std::path::Path, args: &[&str]) -> std::process::Output {
-    Command::cargo_bin("ag")
+    Command::cargo_bin("as")
         .expect("binary should build")
         .current_dir(project)
         .args(args)
@@ -24,7 +24,7 @@ fn json_command(project: &std::path::Path, args: &[&str]) -> Value {
 }
 
 fn init(project: &std::path::Path) {
-    Command::cargo_bin("ag")
+    Command::cargo_bin("as")
         .expect("binary should build")
         .current_dir(project)
         .args(["init", "--quiet"])

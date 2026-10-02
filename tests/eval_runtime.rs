@@ -4,7 +4,7 @@ use serde_json::Value;
 #[test]
 fn runtime_evaluation_is_successful_and_seed_stable() {
     let run = || {
-        let output = Command::cargo_bin("ag-eval")
+        let output = Command::cargo_bin("as-eval")
             .expect("binary should build")
             .args([
                 "--variant",

@@ -17,26 +17,26 @@ tests/          CLI, integration, concurrency, replay, and fault tests
 ## Local Workflow
 
 ```bash
-cargo build --bin ag
+cargo build --bin as
 cargo test --all-targets
 ```
 
 Initialize a workspace:
 
 ```bash
-ag init
+as init
 ```
 
 Use the task graph:
 
 ```bash
-ag add "Implement a durable store"
-ag ready --json
-ag claim-next --actor agent-a --json
-ag checkpoint <id> --actor agent-a \
+as add "Implement a durable store"
+as ready --json
+as claim-next --actor agent-a --json
+as checkpoint <id> --actor agent-a \
   --summary "Store boundary implemented" \
   --next-step "Add recovery test"
-ag close <id> --reason "Tests pass"
+as close <id> --reason "Tests pass"
 ```
 
 Run the durable runtime demo:
@@ -58,7 +58,7 @@ cargo test --all-targets
 The project also includes:
 
 - Criterion benchmarks in `benches/engine.rs`;
-- deterministic fake-worker evaluation in `src/bin/ag-eval.rs`;
+- deterministic fake-worker evaluation in `src/bin/as-eval.rs`;
 - process-level crash and lease recovery tests;
 - JSONL export, import, replay, and verification tests.
 

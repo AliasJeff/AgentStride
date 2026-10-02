@@ -98,8 +98,8 @@ human confirmation.
 
 ## Interfaces
 
-The stable human and automation surface is the `ag` CLI with JSON output.
-`ag mcp` exposes a local stdio MCP server. The UI is read-only and exists to
+The stable human and automation surface is the `as` CLI with JSON output.
+`as mcp` exposes a local stdio MCP server. The UI is read-only and exists to
 inspect a run, its attempts, recovery events, and plan revision.
 
 No remote service is required.

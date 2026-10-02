@@ -4,7 +4,7 @@ use clap::{Args, Parser, Subcommand};
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "ag",
+    name = "as",
     version,
     about = "A local-first runtime for reliable long-running Agent work"
 )]

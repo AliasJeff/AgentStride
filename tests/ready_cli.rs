@@ -3,7 +3,7 @@ use serde_json::Value;
 use tempfile::tempdir;
 
 fn json_command(project: &std::path::Path, args: &[&str]) -> Value {
-    let output = Command::cargo_bin("ag")
+    let output = Command::cargo_bin("as")
         .expect("binary should build")
         .current_dir(project)
         .args(args)
@@ -27,7 +27,7 @@ fn add(project: &std::path::Path, title: &str) -> String {
 #[test]
 fn closing_a_blocker_changes_the_ready_frontier() {
     let project = tempdir().expect("temporary project");
-    Command::cargo_bin("ag")
+    Command::cargo_bin("as")
         .expect("binary should build")
         .current_dir(project.path())
         .args(["init", "--quiet"])

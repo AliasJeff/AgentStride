@@ -5,7 +5,7 @@ use tempfile::tempdir;
 #[test]
 fn mcp_lists_tools_and_dispatches_ready() {
     let project = tempdir().expect("temporary project");
-    Command::cargo_bin("ag")
+    Command::cargo_bin("as")
         .expect("binary should build")
         .arg("--workspace")
         .arg(project.path())
@@ -19,7 +19,7 @@ fn mcp_lists_tools_and_dispatches_ready() {
         "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
         "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"ready\",\"arguments\":{}}}\n"
     );
-    let output = Command::cargo_bin("ag")
+    let output = Command::cargo_bin("as")
         .expect("binary should build")
         .arg("--workspace")
         .arg(project.path())

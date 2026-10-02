@@ -8,10 +8,10 @@ use serde_json::Value;
 use tempfile::TempDir;
 
 fn run(_root: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_ag"))
+    Command::new(env!("CARGO_BIN_EXE_as"))
         .args(args)
         .output()
-        .expect("run ag")
+        .expect("run as")
 }
 
 fn json(root: &Path, args: &[&str]) -> Value {

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Reproducible durable runtime demo. Requires git, jq, and a built ag binary.
+# Reproducible durable runtime demo. Requires git, jq, and a built as binary.
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-AG_BIN="${AG_BIN:-$ROOT/target/debug/ag}"
+AS_BIN="${AS_BIN:-$ROOT/target/debug/as}"
 # Keep the generated workspace by default so the following UI command remains
 # usable after the demo exits. Set KEEP_DEMO=0 for ephemeral CI-style runs.
 KEEP_DEMO="${KEEP_DEMO:-1}"
@@ -17,8 +17,8 @@ command -v jq >/dev/null || {
     exit 2
 }
 
-if [[ ! -x "$AG_BIN" ]]; then
-    cargo build --quiet --manifest-path "$ROOT/Cargo.toml" --bin ag
+if [[ ! -x "$AS_BIN" ]]; then
+    cargo build --quiet --manifest-path "$ROOT/Cargo.toml" --bin as
 fi
 
 DEMO_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/agent-stride-runtime.XXXXXX")"
@@ -30,8 +30,8 @@ cleanup() {
 trap cleanup EXIT
 
 cd "$DEMO_ROOT"
-run_ag() {
-    "$AG_BIN" --workspace "$DEMO_ROOT" "$@"
+run_as() {
+    "$AS_BIN" --workspace "$DEMO_ROOT" "$@"
 }
 
 future_timestamp() {
@@ -42,23 +42,23 @@ future_timestamp() {
     fi
 }
 
-run_ag init --json >/dev/null
+run_as init --json >/dev/null
 git init -q
 git config user.email "agent-stride-demo@example.com"
 git config user.name "AgentStride Demo"
 
-source_a="$(run_ag add "collect source A" --description "Collect and normalize source A" --json)"
+source_a="$(run_as add "collect source A" --description "Collect and normalize source A" --json)"
 source_a_id="$(jq -r '.id' <<<"$source_a")"
 
-run_ag plan export --json >/dev/null
+run_as plan export --json >/dev/null
 git add .tasks
 git commit -qm "demo: initial research plan"
 base_revision="$(git rev-parse HEAD)"
 
-run_ag runtime start research-run --plan "$base_revision" --json >/dev/null
-run_ag reconcile research-run "$base_revision" --json >/dev/null
+run_as runtime start research-run --plan "$base_revision" --json >/dev/null
+run_as reconcile research-run "$base_revision" --json >/dev/null
 
-poll_json="$(run_ag worker poll \
+poll_json="$(run_as worker poll \
     --worker crashed-worker \
     --lease-until "$(future_timestamp)" \
     --json)"
@@ -68,7 +68,7 @@ crashed_durable_task="$(jq -r '.lease.durable_task_id' <<<"$poll_json")"
 # The child has acquired a real durable lease, then is terminated before it can
 # acknowledge completion. Recovery must make the attempt runnable again.
 (
-    run_ag worker start "$stale_token" --json >/dev/null
+    run_as worker start "$stale_token" --json >/dev/null
     sleep 60
 ) &
 worker_pid=$!
@@ -76,41 +76,41 @@ sleep 6
 kill -9 "$worker_pid" 2>/dev/null || true
 wait "$worker_pid" 2>/dev/null || true
 
-recovery_json="$(run_ag runtime recover research-run --retry-delay 0 --json)"
+recovery_json="$(run_as runtime recover research-run --retry-delay 0 --json)"
 recovered_durable_task="$(jq -r '.recovered[0]' <<<"$recovery_json")"
-run_ag runtime fire "timer-${recovered_durable_task}" --json >/dev/null
+run_as runtime fire "timer-${recovered_durable_task}" --json >/dev/null
 
 set +e
-run_ag worker complete "$stale_token" --result '{"stale":true}' --json >/dev/null 2>&1
+run_as worker complete "$stale_token" --result '{"stale":true}' --json >/dev/null 2>&1
 stale_completion_status=$?
 set -e
 
 # Evolve the plan after the crash and require approval before activation.
-source_b="$(run_ag add "collect source B" --description "Collect and normalize source B" --json)"
+source_b="$(run_as add "collect source B" --description "Collect and normalize source B" --json)"
 source_b_id="$(jq -r '.id' <<<"$source_b")"
-run_ag plan export --json >/dev/null
+run_as plan export --json >/dev/null
 git add .tasks
 git commit -qm "demo: evolve research plan"
 head_revision="$(git rev-parse HEAD)"
 
-run_ag plan propose research-run \
+run_as plan propose research-run \
     --base "$base_revision" \
     --head "$head_revision" \
     --author planner \
     --reason "add a second independent source after restart" \
     --id research-proposal \
     --json >/dev/null
-run_ag plan approve research-proposal --actor reviewer --json >/dev/null
-run_ag plan activate research-run "$head_revision" --json >/dev/null
+run_as plan approve research-proposal --actor reviewer --json >/dev/null
+run_as plan activate research-run "$head_revision" --json >/dev/null
 
 # Drain the durable queue with the deterministic worker.
 for _ in $(seq 1 10); do
-    worker_result="$(run_ag worker run --worker replacement-worker --provider fake --seed 7 --json)"
+    worker_result="$(run_as worker run --worker replacement-worker --provider fake --seed 7 --json)"
     [[ "$(jq -r '.type' <<<"$worker_result")" == "idle" ]] && break
 done
 
-events_json="$(run_ag runtime events research-run --since 0 --limit 10000 --json)"
-state_json="$(run_ag runtime show research-run --json)"
+events_json="$(run_as runtime events research-run --since 0 --limit 10000 --json)"
+state_json="$(run_as runtime show research-run --json)"
 git_log="$(git log --oneline --all -- .tasks)"
 
 metrics_json="$(
@@ -177,6 +177,6 @@ fi
 
 printf 'durable runtime demo passed\n'
 printf 'artifacts: %s\n' "$DEMO_ROOT"
-printf 'ui command: cargo run --bin ag -- --workspace %q ui --run research-run --port 8787\n' \
+printf 'ui command: cargo run --bin as -- --workspace %q ui --run research-run --port 8787\n' \
     "$DEMO_ROOT"
 cat metrics.json

@@ -55,17 +55,17 @@ Key guarantees:
 ## Quick Start
 
 ```bash
-cargo build --bin ag
+cargo build --bin as
 
-ag init
-ag add "Design storage"
-ag add "Implement storage"
-ag link <implement-id> --blocks <design-id>
-ag ready --json
-ag claim-next --actor worker-a --json
+as init
+as add "Design storage"
+as add "Implement storage"
+as link <implement-id> --blocks <design-id>
+as ready --json
+as claim-next --actor worker-a --json
 ```
 
-The command is `ag`; the project and crate are `agent-stride`.
+The command is `as`; the project and crate are `agent-stride`.
 
 ## Durable Runtime Demo
 
@@ -74,7 +74,7 @@ expired lease, evolves the plan through approval, and verifies the final state.
 
 ```bash
 ./scripts/durable-runtime-demo.sh
-cargo run --bin ag-eval -- --variant runtime --scenario chain --agents 2 --seed 7
+cargo run --bin as-eval -- --variant runtime --scenario chain --agents 2 --seed 7
 ```
 
 For a read-only local execution console:

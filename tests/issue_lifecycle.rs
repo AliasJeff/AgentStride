@@ -3,7 +3,7 @@ use serde_json::Value;
 use tempfile::tempdir;
 
 fn run_json(project: &std::path::Path, args: &[&str]) -> Value {
-    let output = Command::cargo_bin("ag")
+    let output = Command::cargo_bin("as")
         .expect("binary should build")
         .current_dir(project)
         .args(args)
@@ -21,7 +21,7 @@ fn run_json(project: &std::path::Path, args: &[&str]) -> Value {
 #[test]
 fn issue_lifecycle_persists_across_commands() {
     let project = tempdir().expect("temporary project");
-    Command::cargo_bin("ag")
+    Command::cargo_bin("as")
         .expect("binary should build")
         .current_dir(project.path())
         .args(["init", "--quiet"])
@@ -69,7 +69,7 @@ fn issue_lifecycle_persists_across_commands() {
 fn commands_fail_without_an_initialized_workspace() {
     let project = tempdir().expect("temporary project");
 
-    Command::cargo_bin("ag")
+    Command::cargo_bin("as")
         .expect("binary should build")
         .current_dir(project.path())
         .args(["list", "--json"])

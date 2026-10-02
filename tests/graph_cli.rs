@@ -4,7 +4,7 @@ use serde_json::Value;
 use tempfile::tempdir;
 
 fn command(project: &std::path::Path, args: &[&str]) -> std::process::Output {
-    Command::cargo_bin("ag")
+    Command::cargo_bin("as")
         .expect("binary should build")
         .current_dir(project)
         .args(args)
@@ -32,7 +32,7 @@ fn add(project: &std::path::Path, title: &str) -> String {
 #[test]
 fn link_graph_and_unlink_workflow() {
     let project = tempdir().expect("temporary project");
-    Command::cargo_bin("ag")
+    Command::cargo_bin("as")
         .expect("binary should build")
         .current_dir(project.path())
         .args(["init", "--quiet"])
@@ -51,7 +51,7 @@ fn link_graph_and_unlink_workflow() {
     let graph = json_command(project.path(), &["graph", "--json"]);
     assert_eq!(graph.as_array().expect("edge list").len(), 1);
 
-    Command::cargo_bin("ag")
+    Command::cargo_bin("as")
         .expect("binary should build")
         .current_dir(project.path())
         .args(["unlink", &dependent, &blocker])
@@ -66,7 +66,7 @@ fn link_graph_and_unlink_workflow() {
 #[test]
 fn link_rejects_cycle() {
     let project = tempdir().expect("temporary project");
-    Command::cargo_bin("ag")
+    Command::cargo_bin("as")
         .expect("binary should build")
         .current_dir(project.path())
         .args(["init", "--quiet"])
@@ -80,7 +80,7 @@ fn link_rejects_cycle() {
         &["link", &second, "--blocks", &first, "--json"],
     );
 
-    Command::cargo_bin("ag")
+    Command::cargo_bin("as")
         .expect("binary should build")
         .current_dir(project.path())
         .args(["link", &first, "--blocks", &second, "--json"])

@@ -9,11 +9,11 @@ const AGENTS_BLOCK: &str = r#"<!-- AGENT-STRIDE:BEGIN -->
 
 ## AgentStride Workflow
 
-- Start with `ag prime --actor <actor>`.
-- Choose work from `ag ready --json`.
-- Claim work before editing with `ag claim <id> --actor <actor>`.
-- Save resumable progress with `ag checkpoint`.
-- Close work only after tests pass with `ag close`.
+- Start with `as prime --actor <actor>`.
+- Choose work from `as ready --json`.
+- Claim work before editing with `as claim <id> --actor <actor>`.
+- Save resumable progress with `as checkpoint`.
+- Close work only after tests pass with `as close`.
 - Re-prime after context loss or session compaction.
 - Use `send`, `inbox`, `thread`, and `reply` for agent coordination.
 
@@ -21,9 +21,9 @@ const AGENTS_BLOCK: &str = r#"<!-- AGENT-STRIDE:BEGIN -->
 
 const SKILL: &str = r#"# agent-stride
 
-Use `ag` as the durable task and execution state for this repository.
+Use `as` as the durable task and execution state for this repository.
 
-1. Run `ag prime --actor <actor>` before starting.
+1. Run `as prime --actor <actor>` before starting.
 2. Claim one ready issue before modifying files.
 3. Keep a checkpoint with the next concrete action and test evidence.
 4. Close the issue only after verification.

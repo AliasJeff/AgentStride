@@ -7,12 +7,12 @@ use serde_json::Value;
 use tempfile::TempDir;
 
 fn run(workspace: &Path, cache: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_ag"))
+    Command::new(env!("CARGO_BIN_EXE_as"))
         .env("XDG_CACHE_HOME", cache)
         .args(["--workspace", workspace.to_str().expect("workspace")])
         .args(args)
         .output()
-        .expect("run ag")
+        .expect("run as")
 }
 
 fn json(workspace: &Path, cache: &Path, args: &[&str]) -> Value {

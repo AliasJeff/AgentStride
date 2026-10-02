@@ -1966,7 +1966,7 @@ fn format_init(result: &InitResult) -> String {
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
-    #[error("workspace is not initialized; run `ag init` first")]
+    #[error("workspace is not initialized; run `as init` first")]
     WorkspaceNotInitialized,
 
     #[error("memory `{key}` was not found")]
