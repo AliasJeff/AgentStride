@@ -1,34 +1,42 @@
 # AgentStride
 
-> Durable execution for long-running Agent work.
+> Durable execution for long-running agent work.
 
-AgentStride is a local-first Rust runtime for coding tasks that must survive
-context loss, worker failure, retries, process restarts, and plan changes.
+AgentStride is a local-first runtime, written in Rust, for coding agents that
+do long, multi-step work. It keeps the **plan in Git** and the **execution
+history in SQLite**, so a run survives everything that normally kills a
+long agent job: lost context, worker crashes, expired leases, retries,
+process restarts, and plan changes made mid-flight.
 
-It keeps two kinds of durable facts separate:
+When something goes wrong, recovery is not guesswork — it is derived from an
+append-only history that records exactly what happened, in order, forever.
 
-```text
-Plan layer       Git-versioned tasks and dependencies
-Execution layer  SQLite history, leases, timers, and outcomes
-```
+![AgentStride execution map](docs/execution-map.png)
 
-The project is intentionally small: one binary, one SQLite database, and no
-server dependency.
+*The read-only web console replaying a finished run: four scheduling waves,
+three branches executed in parallel by three workers, and one branch that
+failed once and recovered behind a durable retry timer.*
 
 ## Why
 
-Long-running Agent work is not a normal task queue:
+Long-running agent work is not a normal task queue:
 
-- the plan can change while execution is in progress;
-- an Agent can lose context or stop halfway through a task;
-- workers can crash after claiming work;
-- retries must not allow stale workers to overwrite newer attempts;
-- recovery must be explainable from durable history.
+- **The plan changes while work is in progress.** An LLM that plans is allowed
+  to change its mind. AgentStride stores the plan as versioned data, so
+  changing it requires an explicit, approved revision — never a silent rewrite.
+- **Agents crash or lose context halfway through a task.** Every attempt has a
+  transactional lease and a signed capability token. When the lease expires,
+  the work is recovered and handed to another worker; a stale worker that
+  comes back late is fenced off instead of overwriting newer results.
+- **Retries must not corrupt state.** Tasks retry behind persistent timers,
+  and every retry is a new, explicitly numbered attempt in history.
+- **You need to explain what happened.** State and events commit together in
+  one transaction, so history can always rebuild and verify the current state.
 
-AgentStride treats the plan as versioned data and execution as an append-only
-state machine. A reconciler joins the two without rewriting completed history.
+AgentStride treats the plan as data and execution as an append-only state
+machine. A reconciler joins the two without rewriting completed history.
 
-## Core Model
+## How it works
 
 ```text
 Git PlanRevision
@@ -40,6 +48,17 @@ Run -> Durable Task -> Worker Attempt
         |
         +-> checkpoint / retry / timeout / recovery / handoff
 ```
+
+- The **plan layer** is a set of tasks and `blocks` edges exported as JSONL
+  into Git. A revision is immutable; changing the plan means proposing and
+  approving a new revision.
+- The **runtime layer** is a SQLite event log plus materialized task state.
+  A run executes one plan revision. Ready work is derived from authoritative
+  state — including diamond and fan-in dependencies, not just chains — so
+  independent branches run concurrently under separate leases.
+- The **reconciler** compares the current revision to the run and computes
+  discovered, ready, invalidated, and superseded work. Completed tasks are
+  never silently rerun when the plan changes.
 
 Key guarantees:
 
@@ -65,23 +84,58 @@ as ready --json
 as claim-next --actor worker-a --json
 ```
 
-The command is `as`; the project and crate are `agent-stride`.
+The command is `as`; the project and crate are `agent-stride`. One binary,
+one SQLite file, no server — everything runs on your machine.
 
-## Durable Runtime Demo
+## Demos
 
-The demo creates a Git-backed plan, starts a run, kills a worker, recovers the
-expired lease, evolves the plan through approval, and verifies the final state.
+### Parallel branches
+
+Builds a release DAG — one root, three parallel branches, a diamond join, and
+a fan-in merge — and executes it with three concurrent workers. One branch
+fails on purpose, parks behind a durable retry timer, and recovers without
+blocking the others. The script asserts wave scheduling, dependency gating,
+recovery, and history integrity, then prints the evidence as JSON.
+
+```bash
+./scripts/parallel-branches-demo.sh
+cargo test --test parallel_branches
+```
+
+Open the generated workspace in the web console to see the branching
+execution map from the screenshot above.
+
+### Crash and recovery
+
+Creates a Git-backed plan, starts a run, kills a worker mid-attempt, recovers
+the expired lease, evolves the plan through an approved revision, and verifies
+the final state.
 
 ```bash
 ./scripts/durable-runtime-demo.sh
 cargo run --bin as-eval -- --variant runtime --scenario chain --agents 2 --seed 7
 ```
 
-For a read-only local execution console:
+### Web console
+
+Runs the durable demo and opens the read-only observability UI immediately:
 
 ```bash
 ./scripts/observability-demo.sh
 ```
+
+The UI never mutates state. It replays history: the execution map draws the
+plan as a branching DAG with wave labels, task nodes drill down into their
+attempt lifecycle, and the event panel streams the append-only log.
+
+## Interfaces
+
+- **CLI (`as`)** — the stable human and automation surface, with JSON output.
+- **MCP (`as mcp`)** — a local stdio MCP server for agent integration.
+- **Web console (`as ui`)** — read-only replay of a run.
+- **Deterministic evaluator (`as-eval`)** — exercises chains, diamonds,
+  retries, timeouts, handoffs, recovery, and plan evolution with fake workers,
+  no model API key needed.
 
 ## Checks
 
@@ -97,8 +151,8 @@ correctness and behavior, not production-scale performance claims.
 
 ## Scope
 
-AgentStride is a single-machine personal project. It does not attempt to be a
-Temporal-compatible server or a general Agent platform.
+AgentStride is a single-machine personal project. It does not try to be a
+Temporal-compatible server or a general agent platform.
 
 Out of scope:
 
