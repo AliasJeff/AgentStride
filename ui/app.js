@@ -234,6 +234,10 @@
     const tasks = [...taskMap().values()];
     const current = state.selectedTask;
     taskSelect.innerHTML = "";
+    const overviewOption = document.createElement("option");
+    overviewOption.value = "";
+    overviewOption.textContent = "All tasks · execution DAG";
+    taskSelect.append(overviewOption);
     for (const task of tasks) {
       const option = document.createElement("option");
       option.value = task.id;
@@ -242,25 +246,28 @@
     }
     if (!tasks.length) {
       taskSelect.disabled = true;
-      taskSelect.innerHTML = "<option>No tasks in this Run</option>";
       return;
     }
     taskSelect.disabled = false;
-    state.selectedTask = tasks.some((task) => task.id === current) ? current : tasks[0].id;
-    taskSelect.value = state.selectedTask;
+    // Default to the branch-level DAG; drill into a task only on purpose.
+    state.selectedTask = tasks.some((task) => task.id === current) ? current : null;
+    taskSelect.value = state.selectedTask || "";
   }
 
   function buildLayout() {
     const tasks = [...taskMap().values()];
     const compact = window.innerWidth < 820;
-    const edges = (state.plan?.edges || []).filter(
-      (edge) => tasks.some((task) => task.id === edge.source_id) && tasks.some((task) => task.id === edge.target_id),
-    );
+    // Scheduling edges run blocker -> dependent: an Edge(source, target, blocks)
+    // means "source is blocked by target", so execution flows target to source.
+    const edges = (state.plan?.edges || [])
+      .filter((edge) => edge.edge_type !== "related")
+      .map((edge) => ({ from: edge.target_id, to: edge.source_id, edge_type: edge.edge_type }))
+      .filter((edge) => tasks.some((task) => task.id === edge.from) && tasks.some((task) => task.id === edge.to));
     const layers = new Map(tasks.map((task) => [task.id, 0]));
     const independent = !compact && edges.length === 0;
     for (let pass = 0; pass < tasks.length; pass += 1) {
       for (const edge of edges) {
-        layers.set(edge.target_id, Math.max(layers.get(edge.target_id) || 0, (layers.get(edge.source_id) || 0) + 1));
+        layers.set(edge.to, Math.max(layers.get(edge.to) || 0, (layers.get(edge.from) || 0) + 1));
       }
     }
     const columns = new Map();
@@ -271,13 +278,17 @@
       }
       columns.get(layer).push(task);
     }
+    for (const column of columns.values()) {
+      column.sort((left, right) => (left.priority ?? 9) - (right.priority ?? 9) || left.title.localeCompare(right.title));
+    }
     const nodeWidth = compact ? 250 : 250;
     const nodeHeight = 126;
     const gapX = compact ? 0 : 86;
     const gapY = 44;
     const positions = new Map();
+    const orderedColumns = [...columns.entries()].sort((a, b) => a[0] - b[0]);
     let maxRows = 1;
-    for (const [layer, column] of [...columns.entries()].sort((a, b) => a[0] - b[0])) {
+    for (const [layer, column] of orderedColumns) {
       maxRows = Math.max(maxRows, column.length);
       const totalHeight = column.length * nodeHeight + (column.length - 1) * gapY;
       column.forEach((task, index) => {
@@ -294,13 +305,14 @@
       edges,
       positions,
       compact,
+      independent,
+      orderedColumns,
       width: compact ? 400 : Math.max(1100, Math.max(1, columns.size) * (nodeWidth + gapX) + 50),
       height: compact
         ? Math.max(560, tasks.length * (nodeHeight + gapY) + 100)
         : Math.max(560, maxRows * (nodeHeight + gapY) + 110),
     };
   }
-
   function svgElement(name, attributes = {}) {
     const element = document.createElementNS(SVG_NS, name);
     for (const [key, value] of Object.entries(attributes)) {
@@ -331,22 +343,34 @@
     }
 
     for (const edge of layout.edges) {
-      const source = layout.positions.get(edge.source_id);
-      const target = layout.positions.get(edge.target_id);
-      const startX = source.x + 250;
-      const startY = source.y + 63;
-      const endX = target.x;
-      const endY = target.y + 63;
+      const from = layout.positions.get(edge.from);
+      const to = layout.positions.get(edge.to);
+      const startX = from.x + 250;
+      const startY = from.y + 63;
+      const endX = to.x;
+      const endY = to.y + 63;
       const curve = layout.compact ? 52 : Math.max(50, (endX - startX) / 2);
       const path = svgElement("path", {
         class: "flow-edge",
         d: layout.compact
-          ? `M ${source.x + 125} ${source.y + 126} C ${source.x + 125 + curve} ${source.y + 140}, ${target.x + 125 + curve} ${target.y - 14}, ${target.x + 125} ${target.y}`
+          ? `M ${from.x + 125} ${from.y + 126} C ${from.x + 125 + curve} ${from.y + 140}, ${to.x + 125 + curve} ${to.y - 14}, ${to.x + 125} ${to.y}`
           : `M ${startX} ${startY} C ${startX + curve} ${startY}, ${endX - curve} ${endY}, ${endX} ${endY}`,
       });
       flowWorld.append(path);
-      const edgeLabel = svgText(flowWorld, statusLabel(edge.edge_type), (startX + endX) / 2 - 22, (startY + endY) / 2 - 8, "flow-edge-label");
+      const edgeLabel = svgText(flowWorld, statusLabel(edge.edge_type), (startX + endX) / 2, (startY + endY) / 2 - 8, "flow-edge-label");
       edgeLabel.setAttribute("text-anchor", "middle");
+    }
+
+    if (!layout.compact && !layout.independent) {
+      for (const [layer, column] of layout.orderedColumns) {
+        svgText(
+          flowWorld,
+          `wave ${layer + 1} · ${column.length} parallel`,
+          layout.positions.get(column[0].id).x + 125,
+          30,
+          "flow-wave-label",
+        );
+      }
     }
 
     for (const task of layout.tasks) {
@@ -643,8 +667,7 @@
     state.selectedTask = taskSelect.value || null;
     state.selectedEvent = null;
     render();
-  });
-  $("#refresh-button").addEventListener("click", () => refresh(true));
+  });  $("#refresh-button").addEventListener("click", () => refresh(true));
   $("#retry-button").addEventListener("click", () => {
     clearError();
     loadRuns();
