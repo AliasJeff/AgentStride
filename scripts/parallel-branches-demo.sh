@@ -8,18 +8,26 @@ set -euo pipefail
 #                draft release plan              (wave 1)
 #               /       |         \
 #      build backend  build frontend  write docs (wave 2, 3-way parallel)
-#               \       /
-#             run integration tests             (wave 3, diamond join)
-#                    \        |
-#                     cut release <-----------  (wave 4, fan-in join)
+#               \       |         /
+#             run integration tests            (wave 3, three-way join)
+#                     |
+#                  cut release                 (wave 4)
 #
 # Three workers claim the three wave-2 branches concurrently. One branch fails
 # transiently, parks behind a durable retry timer, and recovers without losing
 # the other two branches. Reconciles prove downstream work stays gated until
-# every predecessor has succeeded.
+# every predecessor has succeeded, whichever branch fails.
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-AS_BIN="${AS_BIN:-$ROOT/target/debug/as}"
+AS_BIN="${AS_BIN:-}"
+# Prefer a repo build, then an as binary shipped next to the extracted archive.
+if [[ -z "$AS_BIN" ]]; then
+    if [[ -x "$ROOT/target/debug/as" ]]; then
+        AS_BIN="$ROOT/target/debug/as"
+    elif [[ -x "$ROOT/as" ]]; then
+        AS_BIN="$ROOT/as"
+    fi
+fi
 # Keep the generated workspace by default so the UI command stays usable.
 # Set KEEP_DEMO=0 for ephemeral CI-style runs.
 KEEP_DEMO="${KEEP_DEMO:-1}"
@@ -33,8 +41,9 @@ command -v jq >/dev/null || {
     exit 2
 }
 
-if [[ ! -x "$AS_BIN" ]]; then
+if [[ -z "$AS_BIN" || ! -x "$AS_BIN" ]]; then
     cargo build --quiet --manifest-path "$ROOT/Cargo.toml" --bin as
+    AS_BIN="${AS_BIN:-$ROOT/target/debug/as}"
 fi
 
 DEMO_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/agent-stride-branches.XXXXXX")"
@@ -84,8 +93,8 @@ run_as link "$frontend_id" --blocks "$root_id" --json >/dev/null
 run_as link "$docs_id" --blocks "$root_id" --json >/dev/null
 run_as link "$tests_id" --blocks "$backend_id" --json >/dev/null
 run_as link "$tests_id" --blocks "$frontend_id" --json >/dev/null
+run_as link "$tests_id" --blocks "$docs_id" --json >/dev/null
 run_as link "$release_id" --blocks "$tests_id" --json >/dev/null
-run_as link "$release_id" --blocks "$docs_id" --json >/dev/null
 
 run_as plan export --json >/dev/null
 git add .tasks
@@ -146,8 +155,9 @@ timer_id="$(run_as runtime show "$RUN_ID" --json | jq -r '.timers | keys | .[0]'
 retry_epoch="$(jq -rn --arg t "$retry_at" \
     '($t | sub("\\.[0-9]+"; "") | strptime("%Y-%m-%dT%H:%M:%SZ") | mktime)')"
 now_epoch="$(date +%s)"
-if ((retry_epoch > now_epoch)); then
-    sleep $((retry_epoch - now_epoch))
+if ((retry_epoch >= now_epoch)); then
+    # Sleep past the fractional-second fire_at, not just to the whole second.
+    sleep $((retry_epoch - now_epoch + 1))
 fi
 run_as runtime fire "$timer_id" --json >/dev/null
 retry_result="$(run_as worker run --worker branch-worker-a --provider fake --seed 7 --json)"
@@ -156,18 +166,18 @@ assert_eq "$(jq -r '.type' <<<"$retry_result")" "completed" \
 assert_eq "$(jq -r '.task_id' <<<"$retry_result")" "$retry_task_id" \
     "the retry resumed the exact parked branch"
 
-# --- Wave 3: the diamond join unlocks after both build branches succeed ------
+# --- Wave 3: the join unlocks after all three build branches succeed ---------
 wave3="$(run_as reconcile "$RUN_ID" "$base_revision" --json)"
 wave3_scheduled="$(scheduled_from_reconcile "$wave3")"
 assert_eq "$wave3_scheduled" "[\"$tests_id\"]" \
-    "integration tests unlock only after backend AND frontend succeeded"
+    "integration tests unlock only after backend, frontend, AND docs succeeded"
 run_as worker run --worker tests-worker --provider fake --seed 7 --json >/dev/null
 
-# --- Wave 4: the fan-in join -------------------------------------------------
+# --- Wave 4: the final release gate ------------------------------------------
 wave4="$(run_as reconcile "$RUN_ID" "$base_revision" --json)"
 wave4_scheduled="$(scheduled_from_reconcile "$wave4")"
 assert_eq "$wave4_scheduled" "[\"$release_id\"]" \
-    "the release unlocks only after tests AND docs succeeded"
+    "the release unlocks only after the integration join succeeded"
 run_as worker run --worker release-worker --provider fake --seed 7 --json >/dev/null
 
 events_json="$(run_as runtime events "$RUN_ID" --since 0 --limit 10000 --json)"
@@ -180,6 +190,7 @@ metrics_json="$(
         --argjson waves "[$wave1_scheduled,$wave2_scheduled,$gate_scheduled,$wave3_scheduled,$wave4_scheduled]" \
         --arg backend_id "$backend_id" \
         --arg frontend_id "$frontend_id" \
+        --arg docs_id "$docs_id" \
         --arg tests_id "$tests_id" \
         --arg release_id "$release_id" \
         --arg base_revision "$base_revision" \
@@ -209,7 +220,9 @@ metrics_json="$(
                     ([$events[] | select(.kind.type == "task_scheduled" and .kind.task_id == $tests_id)][0].seq) >
                     ([$events[] | select(.kind.type == "task_succeeded" and .kind.task_id == $backend_id)][0].seq) and
                     ([$events[] | select(.kind.type == "task_scheduled" and .kind.task_id == $tests_id)][0].seq) >
-                    ([$events[] | select(.kind.type == "task_succeeded" and .kind.task_id == $frontend_id)][0].seq)
+                    ([$events[] | select(.kind.type == "task_succeeded" and .kind.task_id == $frontend_id)][0].seq) and
+                    ([$events[] | select(.kind.type == "task_scheduled" and .kind.task_id == $tests_id)][0].seq) >
+                    ([$events[] | select(.kind.type == "task_succeeded" and .kind.task_id == $docs_id)][0].seq)
                 ),
                 fan_in_join_gated: (
                     ([$events[] | select(.kind.type == "task_scheduled" and .kind.task_id == $release_id)][0].seq) >

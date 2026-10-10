@@ -3,7 +3,15 @@ set -euo pipefail
 
 # Reproducible durable runtime demo. Requires git, jq, and a built as binary.
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-AS_BIN="${AS_BIN:-$ROOT/target/debug/as}"
+AS_BIN="${AS_BIN:-}"
+# Prefer a repo build, then an as binary shipped next to the extracted archive.
+if [[ -z "$AS_BIN" ]]; then
+    if [[ -x "$ROOT/target/debug/as" ]]; then
+        AS_BIN="$ROOT/target/debug/as"
+    elif [[ -x "$ROOT/as" ]]; then
+        AS_BIN="$ROOT/as"
+    fi
+fi
 # Keep the generated workspace by default so the following UI command remains
 # usable after the demo exits. Set KEEP_DEMO=0 for ephemeral CI-style runs.
 KEEP_DEMO="${KEEP_DEMO:-1}"
@@ -17,8 +25,9 @@ command -v jq >/dev/null || {
     exit 2
 }
 
-if [[ ! -x "$AS_BIN" ]]; then
+if [[ -z "$AS_BIN" || ! -x "$AS_BIN" ]]; then
     cargo build --quiet --manifest-path "$ROOT/Cargo.toml" --bin as
+    AS_BIN="${AS_BIN:-$ROOT/target/debug/as}"
 fi
 
 DEMO_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/agent-stride-runtime.XXXXXX")"

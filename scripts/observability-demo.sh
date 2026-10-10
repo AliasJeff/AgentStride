@@ -7,6 +7,14 @@ AS_BIN="${AS_BIN:-}"
 PORT="${PORT:-8787}"
 
 if [[ -z "$AS_BIN" ]]; then
+    if [[ -x "$ROOT/target/debug/as" ]]; then
+        AS_BIN="$ROOT/target/debug/as"
+    elif [[ -x "$ROOT/as" ]]; then
+        AS_BIN="$ROOT/as"
+    fi
+fi
+
+if [[ -z "$AS_BIN" || ! -x "$AS_BIN" ]]; then
     cargo build --quiet --manifest-path "$ROOT/Cargo.toml" --bin as
     AS_BIN="$ROOT/target/debug/as"
 fi

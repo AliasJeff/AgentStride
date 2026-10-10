@@ -116,10 +116,12 @@ recovery, and history verification.
 Branching is first-class: a plan is a DAG, the reconciler schedules one ready
 wave at a time, and independent branches execute concurrently under separate
 leases. `scripts/parallel-branches-demo.sh` runs a release DAG (fan-out,
-diamond join, fan-in) with three concurrent workers; one branch fails
+three-way join, final gate) with three concurrent workers; one branch fails
 transiently and recovers behind a durable retry timer while the others keep
 running. The reconciles between waves are the proof that downstream work stays
-gated until every predecessor succeeds.
+gated until every predecessor succeeds. `tests/parallel_branches.rs` covers a
+wider shape — a docs branch that bypasses the join and feeds the release
+directly — with the same deterministic assertions.
 
 `tests/parallel_branches.rs` asserts the same semantics deterministically:
 wave membership, dependency gating across a failed branch, retry attempt

@@ -91,11 +91,11 @@ one SQLite file, no server — everything runs on your machine.
 
 ### Parallel branches
 
-Builds a release DAG — one root, three parallel branches, a diamond join, and
-a fan-in merge — and executes it with three concurrent workers. One branch
-fails on purpose, parks behind a durable retry timer, and recovers without
-blocking the others. The script asserts wave scheduling, dependency gating,
-recovery, and history integrity, then prints the evidence as JSON.
+Builds a release DAG — one root, three parallel branches, a three-way join,
+and a final release gate — and executes it with three concurrent workers. One
+branch fails on purpose, parks behind a durable retry timer, and recovers
+without blocking the others. The script asserts wave scheduling, dependency
+gating, recovery, and history integrity, then prints the evidence as JSON.
 
 ```bash
 ./scripts/parallel-branches-demo.sh
