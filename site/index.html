@@ -1,0 +1,1424 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgentStride: Durable execution for long-running agent work</title>
+<meta name="description" content="AgentStride is a local-first Rust runtime for coding agents that do long, multi-step work. The goal lives in Git, the progress in SQLite. When sessions end or workers crash, the run picks up where it stopped.">
+<meta property="og:title" content="AgentStride: Durable execution for long-running agent work">
+<meta property="og:description" content="Your agent forgets. The run doesn't. The goal lives in Git, the progress in SQLite, so long agent runs survive dead sessions, crashed workers, and plan changes.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://aliasjeff.github.io/AgentStride/">
+<meta property="og:image" content="https://aliasjeff.github.io/AgentStride/execution-map.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b1110'/%3E%3Crect x='1.5' y='1.5' width='29' height='29' rx='6' fill='none' stroke='%23263832'/%3E%3Ctext x='16' y='21.5' font-family='monospace' font-size='13' font-weight='700' fill='%237ee2b8' text-anchor='middle'%3Eas%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script>try { if (localStorage.getItem("as-lang") === "zh") document.documentElement.lang = "zh"; } catch (e) {}</script>
+<style>
+  :root {
+    color-scheme: dark;
+    --canvas: #0b1110;
+    --surface: #111917;
+    --raised: #17211e;
+    --ink: #e8f0eb;
+    --muted: #8c9b94;
+    --faint: #5c6d65;
+    --rule: #263832;
+    --rule-strong: #365047;
+    --mint: #7ee2b8;
+    --mint-dim: rgba(126, 226, 184, 0.14);
+    --cyan: #65d5e4;
+    --amber: #e2b76d;
+    --coral: #f0785f;
+    --sans: "DM Sans", "Avenir Next", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+    --radius: 8px;
+    --content: 1140px;
+  }
+
+  * { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    min-width: 320px;
+    color: var(--ink);
+    background: var(--canvas);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection { background: rgba(126, 226, 184, 0.25); }
+
+  a { color: var(--mint); text-decoration: none; }
+  a:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+  a:focus-visible, button:focus-visible {
+    outline: 2px solid var(--mint);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+
+  .content {
+    width: min(var(--content), calc(100% - 48px));
+    margin: 0 auto;
+  }
+
+  /* ---------- i18n ---------- */
+
+  .zh { display: none !important; }
+  html[lang="zh"] .en { display: none !important; }
+  html[lang="zh"] span.zh { display: inline !important; }
+  html[lang="zh"] pre.zh { display: block !important; }
+
+  /* ---------- nav ---------- */
+
+  .nav {
+    position: fixed;
+    inset: 0 0 auto 0;
+    z-index: 50;
+    background: rgba(11, 17, 16, 0.82);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .nav-inner {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    height: 60px;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--ink);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .brand:hover { text-decoration: none; }
+
+  .brand-mark {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    background: var(--mint-dim);
+    border: 1px solid var(--rule-strong);
+    color: var(--mint);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .nav-links {
+    display: flex;
+    gap: 22px;
+    margin-left: auto;
+  }
+
+  .nav-links a {
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .nav-links a:hover { color: var(--ink); text-decoration: none; }
+
+  .lang-toggle {
+    padding: 7px 12px;
+    border: 1px solid var(--rule-strong);
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12.5px;
+  }
+  .lang-toggle:hover { color: var(--ink); border-color: var(--mint); }
+
+  .nav-gh {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 14px;
+    border: 1px solid var(--rule-strong);
+    border-radius: var(--radius);
+    color: var(--ink);
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .nav-gh:hover { border-color: var(--mint); text-decoration: none; }
+  .nav-gh svg { width: 16px; height: 16px; fill: currentColor; }
+
+  @media (max-width: 760px) {
+    .nav-links { display: none; }
+    .lang-toggle { margin-left: auto; }
+  }
+
+  /* ---------- shared section chrome ---------- */
+
+  section { padding: 96px 0; border-top: 1px solid var(--rule); }
+  section:first-of-type { border-top: 0; }
+
+  .eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 18px;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+  .eyebrow .seq { color: var(--mint); }
+  .eyebrow::after {
+    content: "";
+    flex: 0 1 64px;
+    height: 1px;
+    background: var(--rule-strong);
+  }
+
+  h2 {
+    margin: 0 0 14px;
+    font-size: clamp(28px, 4vw, 40px);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+  }
+
+  .section-sub {
+    max-width: 640px;
+    margin: 0 0 44px;
+    color: var(--muted);
+    font-size: 17px;
+  }
+
+  /* ---------- hero ---------- */
+
+  .hero {
+    padding: 168px 0 88px;
+    background:
+      radial-gradient(900px 420px at 78% -10%, rgba(126, 226, 184, 0.07), transparent 65%),
+      radial-gradient(700px 380px at 12% 8%, rgba(101, 213, 228, 0.05), transparent 60%);
+  }
+
+  .hero-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+    gap: 56px;
+    align-items: center;
+  }
+
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 26px;
+    padding: 7px 14px;
+    border: 1px solid var(--rule-strong);
+    border-radius: 999px;
+    background: var(--surface);
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--muted);
+  }
+
+  .pulse {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--mint);
+    box-shadow: 0 0 0 0 rgba(126, 226, 184, 0.5);
+    animation: pulse 2.4s infinite;
+  }
+
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(126, 226, 184, 0.45); }
+    70% { box-shadow: 0 0 0 8px rgba(126, 226, 184, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(126, 226, 184, 0); }
+  }
+
+  h1 {
+    margin: 0 0 20px;
+    font-size: clamp(38px, 5.6vw, 62px);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.04;
+  }
+
+  .hero-sub {
+    max-width: 540px;
+    margin: 0 0 36px;
+    color: var(--muted);
+    font-size: 18px;
+  }
+
+  .hero-sub strong { color: var(--ink); font-weight: 700; }
+
+  .hero-ctas {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    padding: 13px 24px;
+    border-radius: var(--radius);
+    font-size: 15.5px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .btn:hover { text-decoration: none; }
+  .btn svg { width: 17px; height: 17px; fill: currentColor; }
+
+  .btn-primary {
+    background: var(--mint);
+    color: #08110d;
+  }
+  .btn-primary:hover { background: #93ecC8; }
+
+  .btn-ghost {
+    border: 1px solid var(--rule-strong);
+    color: var(--ink);
+  }
+  .btn-ghost:hover { border-color: var(--mint); }
+
+  @media (max-width: 980px) {
+    .hero { padding-top: 140px; }
+    .hero-grid { grid-template-columns: 1fr; gap: 44px; }
+  }
+
+  /* ---------- hero event log ---------- */
+
+  .logpanel {
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+
+  .logpanel-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 18px 12px;
+    border-bottom: 1px solid var(--rule);
+    background: var(--raised);
+  }
+
+  .logpanel-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+  .logpanel-title b { display: block; margin-top: 3px; color: var(--ink); font-size: 13px; letter-spacing: 0; text-transform: none; font-weight: 700; }
+
+  .logpanel-live {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--mint);
+  }
+  .logpanel-live i {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--mint);
+  }
+
+  .logpanel-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    height: 328px;
+    padding: 14px 12px;
+    overflow: hidden;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+
+  .logrow {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    padding: 7px 10px;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    background: #0f1715;
+    white-space: nowrap;
+  }
+  .logrow.enter { animation: rowin 0.45s ease both; }
+
+  @keyframes rowin {
+    from { transform: translateY(9px); }
+    to { transform: translateY(0); }
+  }
+
+  .logrow .seq { color: var(--faint); flex: 0 0 auto; }
+  .logrow .ev { font-weight: 600; letter-spacing: 0.02em; flex: 0 0 auto; }
+  .logrow .dt { color: var(--faint); overflow: hidden; text-overflow: ellipsis; }
+
+  .ev-run    { color: var(--cyan); }
+  .ev-ready  { color: var(--amber); }
+  .ev-active { color: var(--cyan); }
+  .ev-ok     { color: var(--mint); }
+  .ev-fail   { color: var(--coral); }
+  .ev-timer  { color: var(--amber); }
+
+  .logpanel-foot {
+    padding: 10px 18px;
+    border-top: 1px solid var(--rule);
+    color: var(--faint);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+  }
+
+  .logpanel-note {
+    margin-top: 14px;
+    color: var(--muted);
+    font-size: 14px;
+    max-width: 460px;
+  }
+  .logpanel-note code {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--ink);
+  }
+
+  @media (max-width: 560px) {
+    .logpanel-body { height: 300px; font-size: 11.5px; }
+    .logrow .dt { display: none; }
+  }
+
+  /* ---------- why cards ---------- */
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  @media (max-width: 820px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  .why-card {
+    padding: 26px 26px 24px;
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    background: var(--surface);
+  }
+
+  .why-card h3 {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin: 0 0 10px;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+
+  .why-card p { margin: 0; color: var(--muted); font-size: 15px; }
+  .why-card p strong { color: var(--ink); }
+
+  /* ---------- session vs run ---------- */
+
+  .vs-block {
+    margin-top: 16px;
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+
+  .vs-label {
+    margin: 0;
+    padding: 14px 22px 0;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+
+  .vs-head, .vs-row { display: grid; grid-template-columns: 1fr 1fr; }
+
+  .vs-head span {
+    padding: 10px 22px 14px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .vs-head .h-l { color: var(--coral); border-right: 1px solid var(--rule); }
+  .vs-head .h-r { color: var(--mint); }
+
+  .vs-row > div { padding: 15px 22px; font-size: 15px; border-top: 1px solid var(--rule); }
+  .vs-row .l {
+    color: var(--muted);
+    border-right: 1px solid var(--rule);
+  }
+  .vs-row .l::before {
+    content: "✕";
+    color: var(--coral);
+    font-family: var(--mono);
+    margin-right: 12px;
+  }
+  .vs-row .r { color: var(--ink); }
+  .vs-row .r::before {
+    content: "✓";
+    color: var(--mint);
+    font-family: var(--mono);
+    font-weight: 700;
+    margin-right: 12px;
+  }
+
+  @media (max-width: 560px) {
+    .vs-head span, .vs-row > div { padding: 12px 14px; font-size: 13.5px; }
+  }
+
+  /* ---------- features ---------- */
+
+  .grid-4 {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  @media (max-width: 1020px) { .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 560px)  { .grid-4 { grid-template-columns: 1fr; } }
+
+  .feat {
+    padding: 22px 20px;
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    background: var(--surface);
+    transition: border-color 0.2s ease, transform 0.2s ease;
+  }
+  .feat:hover { border-color: var(--rule-strong); transform: translateY(-2px); }
+
+  .feat .icon { display: block; margin-bottom: 12px; font-size: 22px; line-height: 1; }
+
+  .feat h3 { margin: 0 0 8px; font-size: 15.5px; font-weight: 700; letter-spacing: -0.01em; }
+
+  .feat p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.55; }
+
+  .feat code {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--mint);
+    background: var(--mint-dim);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+
+  /* ---------- how it works ---------- */
+
+  .flow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+    padding: 28px 24px;
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    background: var(--surface);
+  }
+
+  .flow-node {
+    padding: 12px 16px;
+    border: 1px solid var(--rule-strong);
+    border-radius: 8px;
+    background: var(--raised);
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .flow-node small {
+    display: block;
+    margin-top: 2px;
+    color: var(--faint);
+    font-size: 10.5px;
+    font-weight: 400;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .flow-node.git { border-color: rgba(226, 183, 109, 0.45); }
+  .flow-node.git small { color: var(--amber); }
+  .flow-node.hist { border-color: rgba(126, 226, 184, 0.45); }
+  .flow-node.hist small { color: var(--mint); }
+
+  .flow-arrow { color: var(--faint); font-family: var(--mono); font-size: 14px; }
+
+  .flow-effects {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 40px;
+    padding: 0 4px;
+  }
+
+  .flow-effects span {
+    padding: 5px 12px;
+    border: 1px dashed var(--rule-strong);
+    border-radius: 999px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .flow-effects span::before { content: "↳ "; color: var(--faint); }
+
+  .grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+  @media (max-width: 900px) { .grid-3 { grid-template-columns: 1fr; } }
+
+  .layer {
+    padding: 22px 22px 20px;
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    background: var(--surface);
+  }
+  .layer .tag {
+    display: inline-block;
+    margin-bottom: 12px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--cyan);
+  }
+  .layer h3 { margin: 0 0 8px; font-size: 17px; font-weight: 700; }
+  .layer p { margin: 0; color: var(--muted); font-size: 14.5px; }
+  .layer code { font-family: var(--mono); font-size: 13px; color: var(--ink); }
+
+  .callout {
+    margin-top: 16px;
+    padding: 20px 24px;
+    border: 1px solid var(--rule-strong);
+    border-left: 3px solid var(--mint);
+    border-radius: 10px;
+    background: var(--raised);
+    color: var(--muted);
+    font-size: 15.5px;
+  }
+  .callout strong { color: var(--ink); }
+
+  /* ---------- guarantees ---------- */
+
+  .grid-checks {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  @media (max-width: 820px) { .grid-checks { grid-template-columns: 1fr; } }
+
+  .check {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    padding: 15px 18px;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--surface);
+    font-size: 15px;
+  }
+
+  .check::before {
+    content: "✓";
+    flex: 0 0 auto;
+    color: var(--mint);
+    font-weight: 700;
+    font-family: var(--mono);
+  }
+
+  /* ---------- console / demos ---------- */
+
+  .shot {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid var(--rule-strong);
+    border-radius: 10px;
+  }
+
+  .shot-caption {
+    margin: 14px 0 48px;
+    color: var(--faint);
+    font-size: 14px;
+    max-width: 720px;
+  }
+
+  .demo {
+    padding: 20px 22px;
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    background: var(--surface);
+  }
+
+  .demo h3 { margin: 0 0 6px; font-size: 16px; font-weight: 700; }
+  .demo p { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
+
+  .cmd {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px 10px 14px;
+    border: 1px solid var(--rule);
+    border-radius: 7px;
+    background: #0f1715;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    overflow-x: auto;
+  }
+  .cmd code { color: var(--ink); white-space: nowrap; }
+  .cmd code::before { content: "$ "; color: var(--mint); }
+
+  .copy {
+    flex: 0 0 auto;
+    padding: 4px 10px;
+    border: 1px solid var(--rule);
+    border-radius: 5px;
+    background: transparent;
+    color: var(--faint);
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+  .copy:hover { color: var(--mint); border-color: var(--rule-strong); }
+  .copy.done { color: var(--mint); border-color: var(--mint); }
+
+  /* ---------- quick start ---------- */
+
+  .terminal {
+    border: 1px solid var(--rule-strong);
+    border-radius: 10px;
+    background: #0d1413;
+    overflow: hidden;
+  }
+
+  .terminal-bar {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--rule);
+    background: var(--raised);
+  }
+  .terminal-bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--rule-strong); }
+  .terminal-bar i:first-child { background: rgba(240, 120, 95, 0.6); }
+  .terminal-bar i:nth-child(2) { background: rgba(226, 183, 109, 0.6); }
+  .terminal-bar i:nth-child(3) { background: rgba(126, 226, 184, 0.6); }
+  .terminal-bar span {
+    margin-left: 10px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--faint);
+  }
+
+  .terminal pre {
+    display: block;
+    margin: 0;
+    padding: 22px 24px;
+    font-family: var(--mono);
+    font-size: 13.5px;
+    line-height: 1.85;
+    overflow-x: auto;
+  }
+  .terminal .p { color: var(--mint); user-select: none; }
+  .terminal .c { color: var(--faint); }
+  .terminal .arg { color: var(--amber); }
+
+  .interfaces {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 28px;
+  }
+  .interfaces span {
+    padding: 8px 14px;
+    border: 1px solid var(--rule);
+    border-radius: 999px;
+    background: var(--surface);
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--muted);
+  }
+  .interfaces b { color: var(--mint); font-weight: 600; }
+
+  /* ---------- footer ---------- */
+
+  footer {
+    padding: 44px 0 52px;
+    border-top: 1px solid var(--rule);
+  }
+
+  .foot-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 28px 64px;
+    margin-bottom: 36px;
+  }
+
+  .foot-brand { max-width: 300px; }
+  .foot-brand p { margin: 12px 0 0; color: var(--faint); font-size: 13.5px; }
+
+  .foot-col h4 {
+    margin: 0 0 12px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--faint);
+    font-weight: 500;
+  }
+  .foot-col a {
+    display: block;
+    padding: 4px 0;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .foot-col a:hover { color: var(--ink); }
+
+  .foot-base {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding-top: 22px;
+    border-top: 1px solid var(--rule);
+    color: var(--faint);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .foot-base a { color: var(--muted); }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .pulse { animation: none; }
+    .logrow.enter { animation: none; }
+    .feat { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="content nav-inner">
+    <a class="brand" href="#top">
+      <span class="brand-mark">as</span>
+      AgentStride
+    </a>
+    <div class="nav-links">
+      <a href="#why"><span class="en">Why</span><span class="zh">为什么</span></a>
+      <a href="#features"><span class="en">Features</span><span class="zh">特性</span></a>
+      <a href="#how"><span class="en">How it works</span><span class="zh">工作原理</span></a>
+      <a href="#console"><span class="en">Console</span><span class="zh">控制台</span></a>
+      <a href="#quickstart"><span class="en">Quick start</span><span class="zh">快速开始</span></a>
+    </div>
+    <button class="lang-toggle" id="lang-toggle" type="button" aria-label="Switch language">中文</button>
+    <a class="nav-gh" href="https://github.com/AliasJeff/AgentStride" target="_blank" rel="noopener">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+      GitHub
+    </a>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="content hero-grid">
+    <div>
+      <span class="hero-badge"><span class="pulse" aria-hidden="true"></span><span class="en">durable execution · rust · sqlite · local-first</span><span class="zh">持久执行 · Rust · SQLite · 本地优先</span></span>
+      <h1><span class="en">Your agent forgets.<br>The run doesn't.</span><span class="zh">Agent 会失忆。<br>Run 不会。</span></h1>
+      <p class="hero-sub">
+        <span class="en">AgentStride is a local-first runtime for coding agents that do long, multi-step work.
+        The goal lives in <strong>Git</strong>, the progress in <strong>SQLite</strong>.
+        When sessions end, context evaporates, or workers crash,
+        the run picks up exactly where it stopped.</span>
+        <span class="zh">AgentStride 是一个本地优先的运行时，为做长周期、多步骤工作的 coding agent 而建。
+        目标存在 <strong>Git</strong> 里，进度存在 <strong>SQLite</strong> 里。
+        会话结束、上下文蒸发、worker 崩溃，run 都会从停下的地方精确地继续。</span>
+      </p>
+      <div class="hero-ctas">
+        <a class="btn btn-primary" href="https://github.com/AliasJeff/AgentStride" target="_blank" rel="noopener">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+          <span class="en">Star on GitHub</span><span class="zh">在 GitHub 上 Star</span>
+        </a>
+        <a class="btn btn-ghost" href="#quickstart"><span class="en">Quick start ↓</span><span class="zh">快速开始 ↓</span></a>
+      </div>
+    </div>
+
+    <div>
+      <div class="logpanel" aria-label="Simulated append-only execution event log">
+        <div class="logpanel-head">
+          <div class="logpanel-title">append-only history<b>release-run</b></div>
+          <span class="logpanel-live"><i aria-hidden="true"></i>replaying</span>
+        </div>
+        <div class="logpanel-body" id="eventlog"></div>
+        <div class="logpanel-foot">history 10 · read-only</div>
+      </div>
+      <p class="logpanel-note">
+        <span class="en">Every state change commits together with its event, in order, forever.
+        Recovery reads the log. <code>It never guesses</code>.</span>
+        <span class="zh">每次状态变更都与对应事件一起提交，按顺序，永远。
+        恢复从日志推导，<code>从不猜测</code>。</span>
+      </p>
+    </div>
+  </div>
+</header>
+
+<section id="why">
+  <div class="content">
+    <p class="eyebrow"><span class="seq">01</span><span class="en">why</span><span class="zh">为什么</span></p>
+    <h2><span class="en">How long agent jobs fail</span><span class="zh">长任务失败的常见方式</span></h2>
+    <p class="section-sub">
+      <span class="en">A chat session is the wrong container for a long goal. Contexts expire, processes
+      die, plans drift, and a task queue assumes work finishes or fails cleanly.
+      Long agent work does neither.</span>
+      <span class="zh">一个 chat session 是承载长期目标的错误容器。上下文会过期，进程会死掉，计划会漂移，
+      而任务队列假设工作要么干净地完成，要么干净地失败。长任务两者都不是。</span>
+    </p>
+    <div class="grid-2">
+      <div class="why-card">
+        <h3>
+          <span class="en">The goal outgrows the session</span>
+          <span class="zh">会话装不下一个长期目标</span>
+        </h3>
+        <p>
+          <span class="en">A week of work doesn't fit in one context window, and an LLM that plans is
+          allowed to change its mind. AgentStride holds the goal as <strong>versioned
+          data</strong>: growing it takes an explicit, approved revision, never a silent
+          rewrite.</span>
+          <span class="zh">一周的工作装不进一个 context window，而会做规划的 LLM 本来就允许改变主意。
+          AgentStride 把目标存成 <strong>版本化数据</strong>：修改目标需要一次显式、经审批的 revision，
+          绝不是悄悄重写。</span>
+        </p>
+      </div>
+      <div class="why-card">
+        <h3>
+          <span class="en">The worker dies halfway</span>
+          <span class="zh">worker 中途挂掉</span>
+        </h3>
+        <p>
+          <span class="en">Every attempt runs under a <strong>transactional lease</strong> with a signed
+          capability token. When the lease expires, the work is recovered and handed to another
+          worker. A stale worker that comes back late is fenced off, not trusted.</span>
+          <span class="zh">每次 attempt 都在<strong>事务化租约</strong>和签名能力令牌之下运行。租约到期，
+          工作被恢复并交给另一个 worker。迟到归来的过期 worker 会被围栏挡住，而不是被信任。</span>
+        </p>
+      </div>
+      <div class="why-card">
+        <h3>
+          <span class="en">Retries corrupt state</span>
+          <span class="zh">重试污染状态</span>
+        </h3>
+        <p>
+          <span class="en">Tasks retry behind <strong>persistent timers</strong>, and every retry is a new,
+          explicitly numbered attempt in history. Nothing overwrites what already happened.</span>
+          <span class="zh">任务在<strong>持久定时器</strong>后面重试，每次重试都是历史里一条新的、
+          显式编号的 attempt。没有任何东西会覆盖已经发生的事。</span>
+        </p>
+      </div>
+      <div class="why-card">
+        <h3>
+          <span class="en">Nobody can explain the run</span>
+          <span class="zh">没人能说清这次 run 做了什么</span>
+        </h3>
+        <p>
+          <span class="en">State and events commit together in one transaction. History can always
+          <strong>rebuild and verify</strong> the current state. Recovery is derived,
+          not guessed.</span>
+          <span class="zh">状态与事件在同一个事务里一起提交。历史永远可以<strong>重建并校验</strong>当前状态，
+          恢复是推导出来的，不是猜出来的。</span>
+        </p>
+      </div>
+    </div>
+
+    <div class="vs-block">
+      <p class="vs-label"><span class="en">The same goal in two containers</span><span class="zh">同一个目标放在两种容器里</span></p>
+      <div class="vs-head">
+        <span class="h-l"><span class="en">a chat session</span><span class="zh">一个 chat session</span></span>
+        <span class="h-r"><span class="en">an agentstride run</span><span class="zh">一次 agentstride run</span></span>
+      </div>
+      <div class="vs-row">
+        <div class="l"><span class="en">Lives in one context window</span><span class="zh">活在一个 context window 里</span></div>
+        <div class="r"><span class="en">Lives in Git and SQLite</span><span class="zh">活在 Git 和 SQLite 里</span></div>
+      </div>
+      <div class="vs-row">
+        <div class="l"><span class="en">Dies with the process</span><span class="zh">随进程一起死去</span></div>
+        <div class="r"><span class="en">Handed to the next worker, fenced by tokens</span><span class="zh">交给下一个 worker，令牌围栏挡住旧者</span></div>
+      </div>
+      <div class="vs-row">
+        <div class="l"><span class="en">The plan drifts silently</span><span class="zh">计划悄悄漂移</span></div>
+        <div class="r"><span class="en">Changes take an approved revision</span><span class="zh">修改需要一次经审批的 revision</span></div>
+      </div>
+      <div class="vs-row">
+        <div class="l"><span class="en">Retries overwrite the scene</span><span class="zh">重试覆盖现场</span></div>
+        <div class="r"><span class="en">Every retry is a numbered attempt</span><span class="zh">每次重试都是一条编号 attempt</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="content">
+    <p class="eyebrow"><span class="seq">02</span><span class="en">features</span><span class="zh">特性</span></p>
+    <h2><span class="en">What AgentStride provides</span><span class="zh">AgentStride 提供的能力</span></h2>
+    <p class="section-sub">
+      <span class="en">Each mechanism exists to make runs recoverable and history verifiable.</span>
+      <span class="zh">每个机制都为了让 run 可恢复、历史可校验。</span>
+    </p>
+    <div class="grid-4">
+      <div class="feat">
+        <span class="icon" aria-hidden="true">🌿</span>
+        <h3><span class="en">Versioned goals</span><span class="zh">版本化的目标</span></h3>
+        <p>
+          <span class="en">The goal is tasks and <code>blocks</code> edges as JSONL in Git. A revision is
+          immutable; growing the goal means proposing a new one.</span>
+          <span class="zh">目标就是 Git 里 tasks 与 <code>blocks</code> 边的 JSONL。revision 不可变，
+          让目标生长就意味着提出一个新的 revision。</span>
+        </p>
+      </div>
+      <div class="feat">
+        <span class="icon" aria-hidden="true">🎟️</span>
+        <h3><span class="en">Transactional leases</span><span class="zh">事务化租约</span></h3>
+        <p>
+          <span class="en">Claims and leases commit in one transaction. Signed tokens fence stale attempts
+          before they can overwrite newer results.</span>
+          <span class="zh">认领与租约在同一个事务里提交。签名令牌把迟到的过期 attempt 挡在围栏外，
+          让它无法覆盖更新的结果。</span>
+        </p>
+      </div>
+      <div class="feat">
+        <span class="icon" aria-hidden="true">⏰</span>
+        <h3><span class="en">Durable retry timers</span><span class="zh">持久重试定时器</span></h3>
+        <p>
+          <span class="en">Failed work parks behind a persistent timer and comes back ready without
+          blocking unrelated branches.</span>
+          <span class="zh">失败的工作挂在持久定时器后面，到点自动回到 ready，不阻塞任何无关分支。</span>
+        </p>
+      </div>
+      <div class="feat">
+        <span class="icon" aria-hidden="true">📜</span>
+        <h3><span class="en">Append-only history</span><span class="zh">只追加的历史</span></h3>
+        <p>
+          <span class="en">Events and state commit together. The log replays to rebuild and verify
+          materialized state, explicitly and idempotently.</span>
+          <span class="zh">事件与状态一起提交。日志可以重放，显式、幂等地重建并校验物化状态。</span>
+        </p>
+      </div>
+      <div class="feat">
+        <span class="icon" aria-hidden="true">◇</span>
+        <h3><span class="en">The goal is a DAG</span><span class="zh">目标是一张 DAG</span></h3>
+        <p>
+          <span class="en">Chains, diamonds, fan-in: ready work derives from authoritative state, and
+          independent branches run concurrently under separate leases.</span>
+          <span class="zh">链、菱形、扇入：ready 工作从权威状态推导而来，独立分支在各自租约下并发执行。</span>
+        </p>
+      </div>
+      <div class="feat">
+        <span class="icon" aria-hidden="true">🗺️</span>
+        <h3><span class="en">Execution-map console</span><span class="zh">执行地图控制台</span></h3>
+        <p>
+          <span class="en">A read-only web UI replays any run: branching DAG with wave labels, attempt
+          lifecycles, and the live event stream.</span>
+          <span class="zh">只读的 Web UI 重放任意一次 run：带波次标注的分支 DAG、attempt 生命周期、
+          以及实时事件流。</span>
+        </p>
+      </div>
+      <div class="feat">
+        <span class="icon" aria-hidden="true">🔌</span>
+        <h3><span class="en">CLI + MCP</span><span class="zh">CLI + MCP</span></h3>
+        <p>
+          <span class="en"><code>as</code> is the stable human surface with JSON output; <code>as mcp</code>
+          is a local stdio MCP server for agent integration.</span>
+          <span class="zh"><code>as</code> 是面向人和自动化的稳定入口，带 JSON 输出；<code>as mcp</code>
+          是本地 stdio MCP 服务器，供 agent 集成。</span>
+        </p>
+      </div>
+      <div class="feat">
+        <span class="icon" aria-hidden="true">🧪</span>
+        <h3><span class="en">Deterministic evaluator</span><span class="zh">确定性评估器</span></h3>
+        <p>
+          <span class="en"><code>as-eval</code> exercises retries, timeouts, handoffs, recovery, and plan
+          evolution with fake workers, no model API key needed.</span>
+          <span class="zh"><code>as-eval</code> 用假 worker 演练重试、超时、交接、恢复与计划演化，
+          不需要任何模型 API key。</span>
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="content">
+    <p class="eyebrow"><span class="seq">03</span><span class="en">how it works</span><span class="zh">工作原理</span></p>
+    <h2><span class="en">Goals are stored as data. Execution is recorded as a log.</span><span class="zh">目标以数据形式存储。执行以日志形式记录。</span></h2>
+    <p class="section-sub">
+      <span class="en">AgentStride treats the goal as data and execution as an append-only state machine.
+      A reconciler joins the two without rewriting completed history.</span>
+      <span class="zh">AgentStride 把目标当作数据，把执行当作只追加的状态机。
+      调和器（reconciler）把两者对齐，而不重写已完成的历史。</span>
+    </p>
+
+    <div class="flow" role="img" aria-label="Git plan revision feeds a run, which schedules durable tasks that workers attempt; all of it lands in one history that drives checkpoint, retry, timeout, recovery, and handoff.">
+      <div class="flow-node git">Git PlanRevision<small>immutable · jsonl</small></div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-node">Run<small>one revision</small></div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-node">Durable Task<small>diamonds · fan-in</small></div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-node">Worker Attempt<small>lease · token</small></div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-node hist">History<small>sqlite · append-only</small></div>
+    </div>
+    <div class="flow-effects" aria-hidden="true">
+      <span>checkpoint</span><span>retry</span><span>timeout</span><span>recovery</span><span>handoff</span>
+    </div>
+
+    <div class="grid-3">
+      <div class="layer">
+        <span class="tag"><span class="en">plan layer</span><span class="zh">计划层</span></span>
+        <h3><span class="en">The goal is a Git object</span><span class="zh">目标是 Git 里的对象</span></h3>
+        <p>
+          <span class="en">Tasks and <code>blocks</code> edges, exported as JSONL. A revision is immutable;
+          changing the goal means proposing and approving a new revision.</span>
+          <span class="zh">tasks 与 <code>blocks</code> 边，导出为 JSONL。revision 不可变；
+          修改目标意味着提出并批准一个新的 revision。</span>
+        </p>
+      </div>
+      <div class="layer">
+        <span class="tag"><span class="en">runtime layer</span><span class="zh">运行时层</span></span>
+        <h3><span class="en">The progress is a SQLite log</span><span class="zh">进度是 SQLite 里的日志</span></h3>
+        <p>
+          <span class="en">An append-only event log plus materialized task state. A run executes exactly one
+          plan revision, deriving ready work from authoritative state.</span>
+          <span class="zh">只追加的事件日志，加上物化的任务状态。一次 run 只执行一个 plan revision，
+          ready 工作从权威状态推导。</span>
+        </p>
+      </div>
+      <div class="layer">
+        <span class="tag"><span class="en">reconciler</span><span class="zh">调和器</span></span>
+        <h3><span class="en">Change without rewriting</span><span class="zh">变更而不重写</span></h3>
+        <p>
+          <span class="en">Compares the current revision to the run and computes discovered, ready,
+          invalidated, and superseded work. Completed tasks are never silently rerun.</span>
+          <span class="zh">把当前 revision 与运行中的 run 对比，算出 discovered、ready、invalidated、
+          superseded 的工作。已完成的任务绝不会被悄悄重跑。</span>
+        </p>
+      </div>
+    </div>
+
+    <div class="callout">
+      <span class="en"><strong>Kill it on Friday. Rerun on Monday.</strong> Completed work is never repeated,
+      in-flight work is recovered behind its lease, and the revised plan slots in without
+      rewriting history.</span>
+      <span class="zh"><strong>周五 kill 掉，周一重跑。</strong>已完成的工作绝不重复，进行中的工作随租约恢复，
+      修订后的计划直接接入，不重写任何历史。</span>
+    </div>
+  </div>
+</section>
+
+<section id="guarantees">
+  <div class="content">
+    <p class="eyebrow"><span class="seq">04</span><span class="en">guarantees</span><span class="zh">保证</span></p>
+    <h2><span class="en">Recovery is guaranteed by construction.</span><span class="zh">恢复由构造保证</span></h2>
+    <p class="section-sub">
+      <span class="en">These properties are asserted by the test suite, not just claimed.</span>
+      <span class="zh">这些性质由测试断言，不是口头承诺。</span>
+    </p>
+    <div class="grid-checks">
+      <div class="check"><span class="en">Scheduling edges remain acyclic</span><span class="zh">调度边保持无环</span></div>
+      <div class="check"><span class="en">Ready work is derived from authoritative state</span><span class="zh">ready 工作从权威状态推导</span></div>
+      <div class="check"><span class="en">Claims and leases are transactional</span><span class="zh">认领与租约是事务化的</span></div>
+      <div class="check"><span class="en">Stale attempts are fenced by signed tokens</span><span class="zh">过期 attempt 被签名令牌围栏隔离</span></div>
+      <div class="check"><span class="en">State and events commit together</span><span class="zh">状态与事件一起提交</span></div>
+      <div class="check"><span class="en">History rebuilds and verifies materialized state</span><span class="zh">历史能重建并校验物化状态</span></div>
+      <div class="check"><span class="en">Plan changes require an approved revision</span><span class="zh">计划变更需要经审批的 revision</span></div>
+      <div class="check"><span class="en">Replay is explicit and idempotent</span><span class="zh">重放是显式且幂等的</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="console">
+  <div class="content">
+    <p class="eyebrow"><span class="seq">05</span><span class="en">see it run</span><span class="zh">看它运行</span></p>
+    <h2><span class="en">The web console replays every run.</span><span class="zh">Web 控制台重放每一次 run</span></h2>
+    <p class="section-sub">
+      <span class="en">The web console never mutates state. It replays history: the execution map draws the
+      plan as a branching DAG, task nodes drill into their attempt lifecycle, and the event
+      panel streams the append-only log.</span>
+      <span class="zh">Web 控制台从不修改状态。它重放历史：执行地图把计划画成分支 DAG，
+      任务节点可以下钻 attempt 生命周期，事件面板流出只追加日志。</span>
+    </p>
+    <img class="shot" src="execution-map.png"
+         alt="AgentStride web console replaying a run: a branching execution map with four scheduling waves, task nodes marked succeeded, and an append-only event list."
+         loading="lazy">
+    <p class="shot-caption">
+      <span class="en">The read-only console replaying a finished run: four scheduling waves, three branches
+      executed in parallel by three workers, and one branch that failed once and recovered
+      behind a durable retry timer.</span>
+      <span class="zh">只读控制台重放一次完成的 run：四个调度波次、三个分支由三个 worker 并行执行、
+      一条分支失败一次后挂在持久重试定时器后面恢复。</span>
+    </p>
+
+    <div class="grid-3">
+      <div class="demo">
+        <h3><span class="en">Parallel branches</span><span class="zh">并行分支</span></h3>
+        <p>
+          <span class="en">A release DAG with one root, three parallel branches, a three-way join, and a
+          release gate. One branch fails on purpose, parks behind a retry timer, and recovers
+          without blocking the others.</span>
+          <span class="zh">一条发布 DAG：一个根、三条并行分支、一次三路汇合、一道发布闸。
+          一条分支故意失败，挂到重试定时器后面，在不阻塞其他分支的情况下恢复。</span>
+        </p>
+        <div class="cmd">
+          <code>./scripts/parallel-branches-demo.sh</code>
+          <button class="copy" type="button" aria-label="Copy command">copy</button>
+        </div>
+      </div>
+      <div class="demo">
+        <h3><span class="en">Crash and recovery</span><span class="zh">崩溃与恢复</span></h3>
+        <p>
+          <span class="en">Start a run, kill a worker mid-attempt, recover the expired lease, evolve the plan
+          through an approved revision, verify the final state.</span>
+          <span class="zh">启动一次 run，中途杀死一个 worker，恢复过期租约，通过一次经审批的 revision
+          演化计划，校验最终状态。</span>
+        </p>
+        <div class="cmd">
+          <code>./scripts/durable-runtime-demo.sh</code>
+          <button class="copy" type="button" aria-label="Copy command">copy</button>
+        </div>
+      </div>
+      <div class="demo">
+        <h3><span class="en">Web console</span><span class="zh">Web 控制台</span></h3>
+        <p>
+          <span class="en">Run the durable demo and the read-only observability UI opens right away, drawing
+          the same execution map shown above.</span>
+          <span class="zh">运行持久化 demo 就会立即打开只读的可观测 UI，画的就是上面那张执行地图。</span>
+        </p>
+        <div class="cmd">
+          <code>./scripts/observability-demo.sh</code>
+          <button class="copy" type="button" aria-label="Copy command">copy</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="quickstart">
+  <div class="content">
+    <p class="eyebrow"><span class="seq">06</span><span class="en">quick start</span><span class="zh">快速开始</span></p>
+    <h2><span class="en">One binary and one SQLite file on your machine.</span><span class="zh">运行只需要一个可执行文件和一个 SQLite 文件</span></h2>
+    <p class="section-sub">
+      <span class="en">Nothing to deploy and nothing to administer. The whole runtime state is one local
+      SQLite file.</span>
+      <span class="zh">不用部署服务，也不用运维数据库。运行时的全部状态就是本地的一个 SQLite 文件。</span>
+    </p>
+    <div class="terminal">
+      <div class="terminal-bar" aria-hidden="true"><i></i><i></i><i></i><span>as · agent-stride</span></div>
+      <pre class="en"><span class="c"># build the CLI</span>
+<span class="p">$</span> cargo build --bin as
+
+<span class="c"># plan the work: versioned in Git</span>
+<span class="p">$</span> as init
+<span class="p">$</span> as add <span class="arg">"Design storage"</span>
+<span class="p">$</span> as add <span class="arg">"Implement storage"</span>
+<span class="p">$</span> as link <span class="arg">&lt;implement-id&gt;</span> --blocks <span class="arg">&lt;design-id&gt;</span>
+
+<span class="c"># run it: derived, leased, fenced</span>
+<span class="p">$</span> as ready --json
+<span class="p">$</span> as claim-next --actor worker-a --json</pre>
+      <pre class="zh"><span class="c"># 构建 CLI</span>
+<span class="p">$</span> cargo build --bin as
+
+<span class="c"># 规划工作：版本化存入 Git</span>
+<span class="p">$</span> as init
+<span class="p">$</span> as add <span class="arg">"Design storage"</span>
+<span class="p">$</span> as add <span class="arg">"Implement storage"</span>
+<span class="p">$</span> as link <span class="arg">&lt;implement-id&gt;</span> --blocks <span class="arg">&lt;design-id&gt;</span>
+
+<span class="c"># 运行：推导、租约、围栏</span>
+<span class="p">$</span> as ready --json
+<span class="p">$</span> as claim-next --actor worker-a --json</pre>
+    </div>
+    <div class="interfaces">
+      <span><b>as</b> · <span class="en">cli + json</span><span class="zh">命令行 + JSON</span></span>
+      <span><b>as mcp</b> · <span class="en">stdio mcp server</span><span class="zh">stdio MCP 服务器</span></span>
+      <span><b>as ui</b> · <span class="en">read-only console</span><span class="zh">只读控制台</span></span>
+      <span><b>as-eval</b> · <span class="en">deterministic evaluator</span><span class="zh">确定性评估器</span></span>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="content">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a class="brand" href="#top"><span class="brand-mark">as</span>AgentStride</a>
+        <p>
+          <span class="en">Durable execution for long-running agent work. Local-first, in Rust.</span>
+          <span class="zh">为长周期 agent 工作打造的持久执行。本地优先，用 Rust 写成。</span>
+        </p>
+      </div>
+      <div class="foot-col">
+        <h4><span class="en">Project</span><span class="zh">项目</span></h4>
+        <a href="https://github.com/AliasJeff/AgentStride" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/AliasJeff/AgentStride/releases" target="_blank" rel="noopener"><span class="en">Releases</span><span class="zh">发布</span></a>
+        <a href="https://github.com/AliasJeff/AgentStride/issues" target="_blank" rel="noopener"><span class="en">Issues</span><span class="zh">问题</span></a>
+      </div>
+      <div class="foot-col">
+        <h4><span class="en">Docs</span><span class="zh">文档</span></h4>
+        <a href="https://github.com/AliasJeff/AgentStride#readme" target="_blank" rel="noopener">README</a>
+        <a href="https://github.com/AliasJeff/AgentStride/blob/main/docs/architecture.md" target="_blank" rel="noopener"><span class="en">Architecture</span><span class="zh">架构</span></a>
+        <a href="https://github.com/AliasJeff/AgentStride/blob/main/docs/runtime.md" target="_blank" rel="noopener"><span class="en">Runtime model</span><span class="zh">运行时模型</span></a>
+        <a href="https://github.com/AliasJeff/AgentStride/blob/main/docs/development.md" target="_blank" rel="noopener"><span class="en">Development</span><span class="zh">开发</span></a>
+      </div>
+    </div>
+    <div class="foot-base">
+      <span>
+        <span class="en">goal in git · progress in sqlite · MIT</span>
+        <span class="zh">目标在 Git · 进度在 SQLite · MIT</span>
+      </span>
+      <a href="#top"><span class="en">Back to top ↑</span><span class="zh">回到顶部 ↑</span></a>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ----- language toggle ----- */
+
+  var langBtn = document.getElementById("lang-toggle");
+
+  function applyLang(lang) {
+    document.documentElement.lang = lang;
+    if (langBtn) langBtn.textContent = lang === "zh" ? "EN" : "中文";
+  }
+
+  applyLang(document.documentElement.lang === "zh" ? "zh" : "en");
+
+  if (langBtn) {
+    langBtn.addEventListener("click", function () {
+      var next = document.documentElement.lang === "zh" ? "en" : "zh";
+      try { localStorage.setItem("as-lang", next); } catch (e) {}
+      applyLang(next);
+    });
+  }
+
+  /* ----- hero event log ----- */
+
+  var EVENTS = [
+    { seq: "01", cls: "ev-run",    ev: "RUN STARTED",     dt: "release-run · plan 9bc11e9" },
+    { seq: "02", cls: "ev-ready",  ev: "TASK READY",      dt: "draft-release-plan · wave 1" },
+    { seq: "03", cls: "ev-active", ev: "TASK CLAIMED",    dt: "build-backend · release-worker" },
+    { seq: "04", cls: "ev-active", ev: "TASK STARTED",    dt: "build-frontend · attempt 1" },
+    { seq: "05", cls: "ev-fail",   ev: "TASK FAILED",     dt: "write-docs · worker killed" },
+    { seq: "06", cls: "ev-timer",  ev: "TIMER PARKED",    dt: "write-docs · retry behind durable timer" },
+    { seq: "07", cls: "ev-fail",   ev: "ATTEMPT FENCED",  dt: "stale worker · token rejected" },
+    { seq: "08", cls: "ev-active", ev: "TASK RECOVERED",  dt: "write-docs · lease re-granted" },
+    { seq: "09", cls: "ev-ok",     ev: "TASK SUCCEEDED",  dt: "write-docs · attempt 2" },
+    { seq: "10", cls: "ev-ok",     ev: "RUN COMPLETED",   dt: "6 tasks · 1 recovery · history verified" }
+  ];
+
+  var MAX_ROWS = 7;
+
+  function rowEl(e, entering) {
+    var row = document.createElement("div");
+    row.className = "logrow" + (entering && !reduced ? " enter" : "");
+    var seq = document.createElement("span");
+    seq.className = "seq"; seq.textContent = e.seq;
+    var ev = document.createElement("span");
+    ev.className = "ev " + e.cls; ev.textContent = e.ev;
+    var dt = document.createElement("span");
+    dt.className = "dt"; dt.textContent = e.dt;
+    row.append(seq, ev, dt);
+    return row;
+  }
+
+  var body = document.getElementById("eventlog");
+  var index = 0;
+
+  function renderAll() {
+    body.textContent = "";
+    EVENTS.forEach(function (e) { body.appendChild(rowEl(e, false)); });
+  }
+
+  if (reduced) {
+    renderAll();
+  } else {
+    // seed the first few rows, then append the rest on a timer
+    var seed = 4;
+    var timer = null;
+
+    function reseed() {
+      body.textContent = "";
+      index = 0;
+      for (; index < seed; index++) body.appendChild(rowEl(EVENTS[index], false));
+    }
+
+    function tick() {
+      if (document.hidden) return;
+      if (index >= EVENTS.length) {
+        clearInterval(timer);
+        setTimeout(function () {
+          reseed();
+          timer = setInterval(tick, 1900);
+        }, 4200);
+        return;
+      }
+      body.appendChild(rowEl(EVENTS[index], true));
+      index += 1;
+      while (body.children.length > MAX_ROWS) body.removeChild(body.firstChild);
+    }
+
+    reseed();
+    timer = setInterval(tick, 1900);
+  }
+
+  /* ----- copy buttons ----- */
+
+  document.querySelectorAll(".copy").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var cmd = btn.parentElement.querySelector("code").textContent;
+      var done = function () {
+        btn.textContent = "copied";
+        btn.classList.add("done");
+        setTimeout(function () {
+          btn.textContent = "copy";
+          btn.classList.remove("done");
+        }, 1600);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(cmd).then(done, done);
+      } else {
+        done();
+      }
+    });
+  });
+})();
+</script>
+</body>
+</html>
