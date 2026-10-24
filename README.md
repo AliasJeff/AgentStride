@@ -149,19 +149,6 @@ cargo bench --bench engine -- --noplot
 The deterministic evaluator and benchmark report are evidence for local
 correctness and behavior, not production-scale performance claims.
 
-## Scope
-
-AgentStride is a single-machine personal project. It does not try to be a
-Temporal-compatible server or a general agent platform.
-
-Out of scope:
-
-- distributed scheduling and multi-host failover;
-- multi-tenant identity and authorization;
-- filesystem, network, or container isolation;
-- exactly-once semantics for arbitrary external side effects;
-- remote databases and a resident daemon.
-
 ## Documentation
 
 - [Architecture](docs/architecture.md)
